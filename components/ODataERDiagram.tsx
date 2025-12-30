@@ -133,7 +133,7 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                         markerEnd: { type: MarkerType.ArrowClosed, color: '#999' },
                         type: 'smoothstep', 
                         animated: false,
-                        style: { stroke: '#999', strokeWidth: 1.5 },
+                        style: { stroke: '#999', strokeWidth: 1.5, opacity: 1 },
                         // label: nav.name, // 标签太多可能会比较乱，暂时注释掉，鼠标悬停可以显示
                         data: { label: nav.name }
                     });
@@ -183,37 +183,44 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
   }, [url]);
 
   const onNodeClick = useCallback((event: any, node: any) => {
+    // 找出与当前点击节点直接相连的所有 Edge 和 Node
     const connectedEdgeIds = edges.filter(e => e.source === node.id || e.target === node.id);
     const connectedNodeIds = new Set(connectedEdgeIds.flatMap(e => [e.source, e.target]));
     
+    // 1. 更新节点样式：点击的节点和直接相连的节点保持高亮，其他变暗
     setNodes((nds) => nds.map((n) => {
       const isRelated = connectedNodeIds.has(n.id) || n.id === node.id;
       return {
         ...n,
         style: { 
-          opacity: isRelated ? 1 : 0.15,
+          opacity: isRelated ? 1 : 0.1, // 非相关节点透明度降低
           filter: isRelated ? 'none' : 'grayscale(100%)',
           transition: 'all 0.3s ease'
         }
       };
     }));
 
-    setEdges((eds) => eds.map(e => ({
-      ...e,
-      animated: (e.source === node.id || e.target === node.id),
-      style: { 
-        ...e.style, 
-        stroke: (e.source === node.id || e.target === node.id) ? '#0070f3' : '#e5e5e5',
-        strokeWidth: (e.source === node.id || e.target === node.id) ? 2 : 1,
-        zIndex: (e.source === node.id || e.target === node.id) ? 10 : 0
-      },
-      label: (e.source === node.id || e.target === node.id) ? e.data.label : '',
-      labelStyle: {
-        fill: '#0070f3',
-        fontWeight: 700
-      },
-      labelBgStyle: { fill: 'rgba(255, 255, 255, 0.8)' }
-    })));
+    // 2. 更新连线样式：只有直接连接点击节点的线才高亮，其他的变暗
+    setEdges((eds) => eds.map(e => {
+        const isDirectlyConnected = e.source === node.id || e.target === node.id;
+        return {
+            ...e,
+            animated: isDirectlyConnected,
+            style: { 
+                ...e.style, 
+                stroke: isDirectlyConnected ? '#0070f3' : '#999',
+                strokeWidth: isDirectlyConnected ? 2 : 1,
+                opacity: isDirectlyConnected ? 1 : 0.05, // 关键：非相关连线大幅降低透明度
+                zIndex: isDirectlyConnected ? 10 : 0
+            },
+            label: isDirectlyConnected ? e.data.label : '',
+            labelStyle: {
+                fill: isDirectlyConnected ? '#0070f3' : 'transparent', // 隐藏非相关标签
+                fontWeight: 700
+            },
+            labelBgStyle: { fill: isDirectlyConnected ? 'rgba(255, 255, 255, 0.8)' : 'transparent' }
+        };
+    }));
   }, [edges, setNodes, setEdges]);
 
   const resetView = () => {
@@ -221,8 +228,10 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
      setEdges((eds) => eds.map(e => ({
          ...e, 
          animated: false, 
-         style: { stroke: '#999', strokeWidth: 1.5 }, 
-         label: '' 
+         style: { stroke: '#999', strokeWidth: 1.5, opacity: 1 }, // 恢复透明度
+         label: '',
+         labelStyle: { fill: 'transparent' },
+         labelBgStyle: { fill: 'transparent' }
      })));
   };
 
