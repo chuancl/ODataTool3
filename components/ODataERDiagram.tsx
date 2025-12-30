@@ -22,7 +22,7 @@ const elk = new ELK();
 const EntityNode = ({ data, selected }: NodeProps) => {
   return (
     <div className={`border-2 rounded-lg min-w-[200px] bg-content1 transition-all ${selected ? 'border-primary shadow-xl ring-2 ring-primary/20' : 'border-divider shadow-sm'}`}>
-      {/* 定义连接点 Handles */}
+      {/* 定义连接点 Handles - 增加 id 以便更精确控制连接（如果需要），目前主要提供多方位接入 */}
       <Handle type="target" position={Position.Top} className="!bg-primary w-2 h-2 !-top-1" />
       <Handle type="source" position={Position.Top} className="!bg-primary w-2 h-2 !-top-1" />
       <Handle type="target" position={Position.Right} className="!bg-primary w-2 h-2 !-right-1" />
@@ -103,38 +103,20 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
           entity.navigationProperties.forEach((nav: any) => {
             if (nav.targetType) {
                 let targetName = nav.targetType;
-                
-                // 清理 Type 字符串
-                // 1. 移除 Collection(...) 包装
                 if (targetName.startsWith('Collection(')) {
                     targetName = targetName.slice(11, -1);
                 }
-                
-                // 2. 移除命名空间 (例如 NorthwindModel.Order -> Order)
-                // 因为我们的 Node ID 只是简单的实体名
                 targetName = targetName.split('.').pop();
                 
                 if (targetName && initialNodes.find(n => n.id === targetName)) {
-                    // 生成唯一颜色 (基于 source id)
-                    const stringHash = (str: string) => {
-                        let hash = 0;
-                        for (let i = 0; i < str.length; i++) {
-                            hash = str.charCodeAt(i) + ((hash << 5) - hash);
-                        }
-                        return hash;
-                    }
-                    const c = (stringHash(entity.name) & 0x00FFFFFF).toString(16).toUpperCase();
-                    const color = "#" + "00000".substring(0, 6 - c.length) + c;
-
                     initialEdges.push({
                         id: `${entity.name}-${targetName}-${nav.name}`,
                         source: entity.name,
                         target: targetName,
                         markerEnd: { type: MarkerType.ArrowClosed, color: '#999' },
-                        type: 'smoothstep', 
+                        type: 'smoothstep', // 使用 smoothstep 以获得直角折线
                         animated: false,
                         style: { stroke: '#999', strokeWidth: 1.5, opacity: 1 },
-                        // label: nav.name, // 标签太多可能会比较乱，暂时注释掉，鼠标悬停可以显示
                         data: { label: nav.name }
                     });
                 }
@@ -142,20 +124,44 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
           });
         });
 
+        // 计算每个节点的估算高度，以便 ELK 知道其实际大小，避免连线穿过
+        // Header ~40px, Item ~24px, Padding ~16px. Max 12 items + footer (~20px)
+        const getNodeHeight = (propCount: number) => {
+            const visibleProps = Math.min(propCount, 12);
+            const baseHeight = 45; // Title
+            const propsHeight = visibleProps * 24; 
+            const footerHeight = propCount > 12 ? 25 : 10;
+            return baseHeight + propsHeight + footerHeight; 
+        };
+
         // 使用 ELK 进行自动布局
         const elkGraph = {
           id: 'root',
           layoutOptions: {
             'elk.algorithm': 'layered',
             'elk.direction': 'RIGHT',
-            'elk.spacing.nodeNode': '180', // 增加节点间距
-            'elk.layered.spacing.nodeNodeBetweenLayers': '250', // 增加层间距
+            // 节点垂直间距：设大一点防止垂直方向挤压
+            'elk.spacing.nodeNode': '100', 
+            // 层间距（水平）：设大一点给垂直穿梭的线留空间
+            'elk.layered.spacing.nodeNodeBetweenLayers': '350', 
+            // 路由策略
             'elk.edgeRouting': 'ORTHOGONAL',
-            'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-            'elk.spacing.componentComponent': '200', // 增加独立组件间距
-            'elk.layered.spacing.edgeNodeBetweenLayers': '80' // 增加线与节点穿过层的间距
+            // 节点放置策略：NETWORK_SIMPLEX 通常比 BRANDES_KOEPF 产生更少的回环和交叉
+            'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+            // 独立组件间距
+            'elk.spacing.componentComponent': '200', 
+            // 关键：增加连线和节点之间的间距（防止线穿过节点）
+            'elk.layered.spacing.edgeNodeBetweenLayers': '100', 
+            // 尝试交互式减少交叉
+            'elk.layered.crossingMinimization.strategy': 'INTERACTIVE',
+            // 允许合并同向边，视觉更整洁
+            'elk.layered.mergeEdges': 'true'
           },
-          children: initialNodes.map(n => ({ id: n.id, width: 240, height: 240 })), 
+          children: initialNodes.map(n => ({ 
+              id: n.id, 
+              width: 220, // 略微增加预留宽度
+              height: getNodeHeight(n.data.properties.length) // 动态高度
+          })), 
           edges: initialEdges.map(e => ({ id: e.id, sources: [e.source], targets: [e.target] }))
         };
 
@@ -185,24 +191,21 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
   }, [url]);
 
   const onNodeClick = useCallback((event: any, node: any) => {
-    // 找出与当前点击节点直接相连的所有 Edge 和 Node
     const connectedEdgeIds = edges.filter(e => e.source === node.id || e.target === node.id);
     const connectedNodeIds = new Set(connectedEdgeIds.flatMap(e => [e.source, e.target]));
     
-    // 1. 更新节点样式：点击的节点和直接相连的节点保持高亮，其他变暗
     setNodes((nds) => nds.map((n) => {
       const isRelated = connectedNodeIds.has(n.id) || n.id === node.id;
       return {
         ...n,
         style: { 
-          opacity: isRelated ? 1 : 0.1, // 非相关节点透明度降低
+          opacity: isRelated ? 1 : 0.1, 
           filter: isRelated ? 'none' : 'grayscale(100%)',
           transition: 'all 0.3s ease'
         }
       };
     }));
 
-    // 2. 更新连线样式：只有直接连接点击节点的线才高亮，其他的变暗
     setEdges((eds) => eds.map(e => {
         const isDirectlyConnected = e.source === node.id || e.target === node.id;
         return {
@@ -212,12 +215,12 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                 ...e.style, 
                 stroke: isDirectlyConnected ? '#0070f3' : '#999',
                 strokeWidth: isDirectlyConnected ? 2 : 1,
-                opacity: isDirectlyConnected ? 1 : 0.05, // 关键：非相关连线大幅降低透明度
+                opacity: isDirectlyConnected ? 1 : 0.05, 
                 zIndex: isDirectlyConnected ? 10 : 0
             },
             label: isDirectlyConnected ? e.data.label : '',
             labelStyle: {
-                fill: isDirectlyConnected ? '#0070f3' : 'transparent', // 隐藏非相关标签
+                fill: isDirectlyConnected ? '#0070f3' : 'transparent', 
                 fontWeight: 700
             },
             labelBgStyle: { fill: isDirectlyConnected ? 'rgba(255, 255, 255, 0.8)' : 'transparent' }
@@ -230,7 +233,7 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
      setEdges((eds) => eds.map(e => ({
          ...e, 
          animated: false, 
-         style: { stroke: '#999', strokeWidth: 1.5, opacity: 1 }, // 恢复透明度
+         style: { stroke: '#999', strokeWidth: 1.5, opacity: 1 }, 
          label: '',
          labelStyle: { fill: 'transparent' },
          labelBgStyle: { fill: 'transparent' }
