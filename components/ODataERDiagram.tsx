@@ -120,6 +120,12 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                 targetName = targetName.split('.').pop();
                 
                 if (targetName && initialNodes.find(n => n.id === targetName)) {
+                    // --- 核心修改：忽略自关联连线 ---
+                    // 如果源实体和目标实体相同（自关联），则直接跳过，不添加连线
+                    if (entity.name === targetName) {
+                        return; 
+                    }
+
                     rawEdges.push({
                         id: `${entity.name}-${targetName}-${nav.name}`,
                         source: entity.name,
@@ -190,22 +196,7 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
 
             if (!sourceNode || !targetNode) return null;
 
-            // --- 处理自关联 (Self-Reference) ---
-            if (e.source === e.target) {
-                // 自关联强制使用 Right -> Right 回环，避免穿过节点
-                return {
-                    id: e.id,
-                    source: e.source,
-                    target: e.target,
-                    sourceHandle: 'source-right',
-                    targetHandle: 'target-right',
-                    type: 'default', // 使用 Bezier 曲线绘制自然的环
-                    markerEnd: { type: MarkerType.ArrowClosed, color: '#999' },
-                    animated: false,
-                    style: { stroke: '#999', strokeWidth: 1.5, opacity: 1 },
-                    data: { label: e.label }
-                };
-            }
+            // 注意：因为上面已经过滤了自关联，所以这里不需要再处理 e.source === e.target 的情况
 
             // --- 处理不同节点间的关联 ---
             // 计算中心点
@@ -220,7 +211,7 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
             let sourceHandle = 'source-right';
             let targetHandle = 'target-left';
 
-            // 简单的方位判断逻辑
+            // 简单的方位判断逻辑，决定连线从哪边出，哪边进
             if (Math.abs(dx) > Math.abs(dy)) {
                 // 水平方向为主
                 if (dx > 0) {
