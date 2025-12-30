@@ -38,12 +38,15 @@ const App: React.FC = () => {
 
   const openDashboard = (url?: string) => {
     const targetUrl = url || manualInput;
+    // WXT 将 entrypoints/dashboard/index.html 编译为 dashboard.html
+    const pagePath = 'dashboard.html';
+    
     if (targetUrl) {
       // 通过 Query Param 传递 URL 给 Dashboard
-      const dashboardUrl = browser.runtime.getURL(`entrypoints/dashboard/index.html#url=${encodeURIComponent(targetUrl)}`);
+      const dashboardUrl = browser.runtime.getURL(`${pagePath}#url=${encodeURIComponent(targetUrl)}`);
       browser.tabs.create({ url: dashboardUrl });
     } else {
-      const dashboardUrl = browser.runtime.getURL(`entrypoints/dashboard/index.html`);
+      const dashboardUrl = browser.runtime.getURL(pagePath);
       browser.tabs.create({ url: dashboardUrl });
     }
   };
