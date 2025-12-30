@@ -163,9 +163,8 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
      setEdges((eds) => eds.map(e => ({...e, style: { stroke: '#b1b1b7', strokeWidth: 1 }})));
   };
 
-  // 关键：强制 height: 100% 确保 React Flow 有高度
   return (
-    <div className="w-full relative" style={{ height: '100%', minHeight: '400px' }}>
+    <div className="w-full h-full relative" style={{ height: '100%', minHeight: '600px' }}>
       {loading && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80">Loading Layout...</div>}
       <div className="absolute top-4 right-4 z-10">
         <Button size="sm" onPress={resetView}>Reset Highlight</Button>
