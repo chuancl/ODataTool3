@@ -42,24 +42,32 @@ const EntityNode = ({ data, selected }: NodeProps) => {
     <div className={`border-2 rounded-lg min-w-[200px] bg-content1 transition-all relative ${selected ? 'border-primary shadow-xl ring-2 ring-primary/20' : 'border-divider shadow-sm'}`}>
       
       {/* 动态渲染 Ports (Handles) */}
+      {/* 
+          关键点：Handle 的位置 (Position) 是由后续计算出来的 
+          我们通过 absolute 定位将 handle 放到边框的具体坐标上
+      */}
       {data.ports && data.ports.map((port: any) => (
         <Handle
           key={port.id}
           id={port.id}
           type={port.type} // 'source' or 'target'
-          position={port.position} // Position.Left or Position.Right
+          position={port.position} // Top, Right, Bottom, Left
           style={{
-            top: port.y,
+            // ELK 返回的坐标是相对于节点的左上角的
+            // 我们需要微调，让连接点正好压在边框线上
             left: port.x,
-            // 样式微调：让连接点精确位于边框线上
+            top: port.y,
             transform: 'translate(-50%, -50%)', 
-            width: '6px', 
-            height: '6px',
-            background: data.fieldColors?.[port.fieldName] || '#0070f3', // 尝试匹配字段颜色，或者默认蓝
-            opacity: 0, // 默认隐藏，悬停节点时在 onNodeClick 逻辑里也许可以控制，或者保持 hover 显示
-            border: '1px solid white'
+            width: '8px', // 稍微调大一点，方便查看调试，实际可以改小
+            height: '8px',
+            background: data.fieldColors?.[port.fieldName] || '#0070f3',
+            border: '2px solid white',
+            borderRadius: '50%',
+            opacity: selected ? 1 : 0, // 只有选中节点时才显示连接点，保持界面整洁
+            transition: 'opacity 0.2s',
+            zIndex: 50
           }}
-          className="!absolute hover:!opacity-100 transition-opacity z-50"
+          className="!absolute"
         />
       ))}
 
@@ -158,26 +166,25 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
             return;
         }
 
-        // 1. 预计算 & 关系去重
-        const fieldColorMap: Record<string, Record<string, string>> = {}; // Entity -> Field -> Color
+        // 1. 数据准备
+        const fieldColorMap: Record<string, Record<string, string>> = {}; 
         const rawEdges: any[] = [];
-        const processedPairs = new Set<string>(); // 用于防止双向关系导致的重影
-        const portsMap: Record<string, any[]> = {}; // EntityName -> ELK Ports
+        const processedPairs = new Set<string>(); 
+        const portsMap: Record<string, any[]> = {}; 
 
-        // 辅助：获取或初始化实体的颜色Map
         const setFieldColor = (entityName: string, fieldName: string, color: string) => {
             if (!fieldColorMap[entityName]) fieldColorMap[entityName] = {};
             fieldColorMap[entityName][fieldName] = color;
         };
         
-        // 辅助：添加端口
-        const addPort = (entityName: string, portId: string, side: 'EAST' | 'WEST', type: 'source' | 'target', fieldName?: string) => {
+        // 修改：addPort 不再接收 side 参数，因为我们要让 ELK 自由决定
+        const addPort = (entityName: string, portId: string, type: 'source' | 'target', fieldName?: string) => {
             if (!portsMap[entityName]) portsMap[entityName] = [];
             portsMap[entityName].push({
                 id: portId,
-                side: side, // for ELK
-                type: type, // for ReactFlow Handle
-                fieldName: fieldName // for coloring
+                // side: ... 我们不设置 side，让布局引擎决定
+                type: type, 
+                fieldName: fieldName
             });
         };
 
@@ -188,18 +195,13 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                 if (targetName.startsWith('Collection(')) targetName = targetName.slice(11, -1);
                 targetName = targetName.split('.').pop();
                 
-                // 忽略自关联
                 if (entity.name === targetName) return;
 
                 if (targetName && entities.find(n => n.name === targetName)) {
-                    // 生成唯一的关系键 (A-B 和 B-A 视为同一个)
                     const pairKey = [entity.name, targetName].sort().join('::');
-                    
-                    // 基于关系键生成稳定颜色
                     const colorIndex = Math.abs(generateHashCode(pairKey));
                     const edgeColor = getColor(colorIndex);
                     
-                    // 处理字段染色 (始终执行，保证双向字段都高亮)
                     let sourceFieldName = '';
                     let targetFieldName = '';
 
@@ -212,13 +214,9 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                         });
                     }
 
-                    // 检查是否已添加过该关系（解决重影问题）
-                    if (processedPairs.has(pairKey)) {
-                        return;
-                    }
+                    if (processedPairs.has(pairKey)) return;
                     processedPairs.add(pairKey);
 
-                    // 构建双向 Label: "Entity (1 - *) Target"
                     const sMult = nav.sourceMultiplicity || '?';
                     const tMult = nav.targetMultiplicity || '?';
                     const label = `${entity.name} (${sMult} - ${tMult}) ${targetName}`;
@@ -227,10 +225,9 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                     const sourcePortId = `port-source-${edgeId}`;
                     const targetPortId = `port-target-${edgeId}`;
 
-                    // 为该边创建专属端口
-                    // 一般布局流向为 Left -> Right，所以 Source 连出端在 EAST (右)，Target 连入端在 WEST (左)
-                    addPort(entity.name, sourcePortId, 'EAST', 'source', sourceFieldName);
-                    addPort(targetName, targetPortId, 'WEST', 'target', targetFieldName);
+                    // 修改：不再指定方向，只创建端口
+                    addPort(entity.name, sourcePortId, 'source', sourceFieldName);
+                    addPort(targetName, targetPortId, 'target', targetFieldName);
 
                     rawEdges.push({
                         id: edgeId,
@@ -239,20 +236,18 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                         sourcePort: sourcePortId,
                         targetPort: targetPortId,
                         label: label,
-                        color: edgeColor // 暂存颜色
+                        color: edgeColor
                     });
                 }
             }
           });
         });
 
-        // 2. 初始化节点 (不包含坐标，只包含数据)
-        // 计算尺寸 (虚拟尺寸比实际渲染大，增加间距)
+        // 2. 节点尺寸计算
         const getNodeDimensions = (propCount: number, navCount: number) => {
             const visibleProps = Math.min(propCount, 12);
             const visibleNavs = Math.min(navCount, 8);
             const extraHeight = (navCount > 0 ? 10 : 0) + (propCount > 12 ? 20 : 0) + (navCount > 8 ? 20 : 0);
-            
             const height = 45 + (visibleProps * 24) + (visibleNavs * 24) + extraHeight + 50; 
             return { width: 350, height: height };
         };
@@ -267,32 +262,33 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                 height: dims.height,
                 ports: entityPorts.map(p => ({
                     id: p.id,
-                    width: 6,
-                    height: 6,
+                    width: 0, // 端口视为点
+                    height: 0,
                     layoutOptions: {
-                        'org.eclipse.elk.port.side': p.side,
-                        'org.eclipse.elk.port.borderOffset': '0' // 放在边框上
+                         // 关键修改：不强制指定 side，让端口可以在边框上自由移动
+                         'org.eclipse.elk.port.borderOffset': '0' 
                     },
-                    properties: { ...p } // 传递自定义数据以便后续恢复
+                    properties: { ...p }
                 }))
             };
         });
 
-        // 4. ELK 布局配置
+        // 3. ELK 布局配置
         const elkGraph = {
           id: 'root',
           layoutOptions: {
             'elk.algorithm': 'layered',
             'elk.direction': 'RIGHT',
-            // 增加间距以容纳连线
             'elk.spacing.nodeNode': '150', 
             'elk.layered.spacing.nodeNodeBetweenLayers': '350', 
             'elk.edgeRouting': 'ORTHOGONAL',
             'elk.layered.spacing.edgeNodeBetweenLayers': '100',
-            'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF', // 这种策略通常能更好处理端口分布
+            'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
             'elk.spacing.componentComponent': '200',
-            // 端口约束：固定顺序或自由分布？FIXED_SIDE 配合 BRANDES_KOEPF 通常能自动优化不交叉
-            'org.eclipse.elk.portConstraints': 'FIXED_SIDE' 
+            // 关键修改：允许端口分布在任何一边 (FREE)
+            'org.eclipse.elk.portConstraints': 'FREE',
+            // 优化：允许端口在边上按需排序
+            'org.eclipse.elk.layered.allowNonFlowPortsToSwitchSides': 'true'
           },
           children: elkNodes, 
           edges: rawEdges.map(e => ({ 
@@ -306,33 +302,43 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
 
         const layoutedGraph = await elk.layout(elkGraph);
 
-        // 5. 应用坐标 & 转换端口信息回 ReactFlow 节点
+        // 4. 处理布局结果
         const finalNodes = entities.map(entity => {
           const elkNode = layoutedGraph.children?.find(n => n.id === entity.name);
           if (!elkNode) return null;
 
-          // 处理端口坐标
-          // ELK 返回的端口坐标是相对于节点的左上角的
+          const width = elkNode.width || 0;
+          const height = elkNode.height || 0;
+
+          // 计算端口的真实位置和方向
           const processedPorts = elkNode.ports?.map((p: any) => {
-              // 确定 Handle 的 position 属性 (Right/Left/Top/Bottom)
-              // 这里简化处理，根据 side 或者坐标位置
-              // 因为我们设置了 EAST/WEST，可以通过 x 坐标判断
-              // x 近似 0 => Left, x 近似 width => Right
+              const { x, y } = p;
               let position = Position.Right;
-              if (p.x < 10) position = Position.Left;
-              else if (p.x > elkNode.width! - 10) position = Position.Right;
+
+              // 简单的边界检测算法，判断端口落在哪个边上
+              // 容差值，比如 2px
+              const tolerance = 2;
+              
+              if (Math.abs(x) < tolerance) {
+                  position = Position.Left;
+              } else if (Math.abs(x - width) < tolerance) {
+                  position = Position.Right;
+              } else if (Math.abs(y) < tolerance) {
+                  position = Position.Top;
+              } else {
+                  position = Position.Bottom;
+              }
               
               return {
                   id: p.id,
-                  type: p.properties.type, // 'source' or 'target'
+                  type: p.properties.type, 
                   fieldName: p.properties.fieldName,
-                  x: p.x,
-                  y: p.y,
+                  x: x,
+                  y: y,
                   position: position
               };
           });
 
-          // 重新计算渲染高度（同之前逻辑，保持一致）
           const visibleProps = Math.min(entity.properties.length, 12);
           const visibleNavs = Math.min(entity.navigationProperties?.length || 0, 8);
           const extraHeight = ((entity.navigationProperties?.length || 0) > 0 ? 10 : 0);
@@ -346,7 +352,7 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                 keys: entity.keys,
                 navigationProperties: entity.navigationProperties,
                 fieldColors: fieldColorMap[entity.name] || {},
-                ports: processedPorts // 传入计算好的端口
+                ports: processedPorts 
             },
             position: { x: elkNode.x || 0, y: elkNode.y || 0 },
             width: 220, // 渲染宽度
@@ -354,14 +360,14 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
           };
         }).filter(Boolean);
 
-        // 6. 生成最终 Edge 对象 (使用特定的 handleId)
+        // 5. 生成 Edges
         const finalEdges = rawEdges.map(e => {
             return {
                 id: e.id,
                 source: e.source,
                 target: e.target,
-                sourceHandle: e.sourcePort, // 连接到特定端口
-                targetHandle: e.targetPort, // 连接到特定端口
+                sourceHandle: e.sourcePort,
+                targetHandle: e.targetPort,
                 type: 'smoothstep',
                 pathOptions: { borderRadius: 30, offset: 20 },
                 markerStart: { type: MarkerType.ArrowClosed, color: e.color }, 
