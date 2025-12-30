@@ -15,7 +15,7 @@ import 'reactflow/dist/style.css';
 import ELK from 'elkjs/lib/elk.bundled.js';
 import { parseMetadataToSchema } from '@/utils/odata-helper';
 import { Tooltip, Button, Spinner } from "@nextui-org/react";
-import { Key } from 'lucide-react';
+import { Key, Link2 } from 'lucide-react';
 
 const elk = new ELK();
 
@@ -54,8 +54,10 @@ const EntityNode = ({ data, selected }: NodeProps) => {
          {data.label}
       </div>
 
-      {/* 属性列表 */}
+      {/* 内容区域 */}
       <div className="p-2 flex flex-col gap-0.5 bg-content1 rounded-b-md">
+        
+        {/* 普通属性 */}
         {data.properties.slice(0, 12).map((prop: any) => {
           // 检查该字段是否有特殊的关联颜色
           const fieldColor = data.fieldColors?.[prop.name];
@@ -81,6 +83,30 @@ const EntityNode = ({ data, selected }: NodeProps) => {
             <div className="text-[9px] text-default-300 text-center pt-1 italic">
                 + {data.properties.length - 12} properties
             </div>
+        )}
+
+        {/* 导航属性 */}
+        {data.navigationProperties && data.navigationProperties.length > 0 && (
+            <>
+                <div className="h-px bg-divider my-1 mx-1 opacity-50" />
+                {data.navigationProperties.slice(0, 8).map((nav: any) => {
+                    const cleanType = nav.targetType?.replace('Collection(', '').replace(')', '').split('.').pop();
+                    return (
+                        <div key={nav.name} className="text-[10px] flex items-center justify-between p-1 rounded-sm text-default-500 hover:text-primary transition-colors">
+                            <span className="flex items-center gap-1 truncate max-w-[130px]" title={`Navigation: ${nav.name}`}>
+                                <Link2 size={8} className="shrink-0 opacity-70" />
+                                <span className="italic font-medium">{nav.name}</span>
+                            </span>
+                            <span className="text-[9px] opacity-50 truncate max-w-[60px]">{cleanType}</span>
+                        </div>
+                    );
+                })}
+                 {data.navigationProperties.length > 8 && (
+                    <div className="text-[9px] text-default-300 text-center pt-1 italic">
+                        + {data.navigationProperties.length - 8} nav props
+                    </div>
+                )}
+            </>
         )}
       </div>
     </div>
@@ -186,16 +212,23 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
             label: e.name, 
             properties: e.properties, 
             keys: e.keys,
+            navigationProperties: e.navigationProperties, // 传递导航属性
             fieldColors: fieldColorMap[e.name] || {} 
           },
           position: { x: 0, y: 0 }
         }));
 
         // 3. 计算尺寸 (虚拟尺寸比实际渲染大，增加间距)
-        const getNodeDimensions = (propCount: number) => {
+        const getNodeDimensions = (propCount: number, navCount: number) => {
             const visibleProps = Math.min(propCount, 12);
+            const visibleNavs = Math.min(navCount, 8);
+            const extraHeight = (navCount > 0 ? 10 : 0) + (propCount > 12 ? 20 : 0) + (navCount > 8 ? 20 : 0);
+            
+            // 基础高度 + 属性列表高度 + 导航列表高度 + 额外空间
+            const height = 45 + (visibleProps * 24) + (visibleNavs * 24) + extraHeight + 50; 
+            
             // 宽度设大一些，防止连线贴边
-            return { width: 350, height: 45 + visibleProps * 24 + 35 + 80 };
+            return { width: 350, height: height };
         };
 
         // 4. ELK 布局配置
@@ -212,7 +245,10 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
             'elk.layered.nodePlacement.favorStraightEdges': 'true',
             'elk.spacing.componentComponent': '200',
           },
-          children: initialNodes.map(n => ({ id: n.id, ...getNodeDimensions(n.data.properties.length) })), 
+          children: initialNodes.map(n => ({ 
+              id: n.id, 
+              ...getNodeDimensions(n.data.properties.length, n.data.navigationProperties?.length || 0) 
+          })), 
           edges: rawEdges.map(e => ({ id: e.id, sources: [e.source], targets: [e.target] }))
         };
 
@@ -221,11 +257,15 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
         // 5. 应用坐标
         const layoutedNodes = initialNodes.map(node => {
           const elkNode = layoutedGraph.children?.find(n => n.id === node.id);
+          const visibleProps = Math.min(node.data.properties.length, 12);
+          const visibleNavs = Math.min(node.data.navigationProperties?.length || 0, 8);
+          const extraHeight = ((node.data.navigationProperties?.length || 0) > 0 ? 10 : 0);
+          
           return {
             ...node,
             position: { x: elkNode?.x || 0, y: elkNode?.y || 0 },
             width: 220, // 实际渲染宽度
-            height: node.data.properties.length * 24 + 60
+            height: (visibleProps * 24) + (visibleNavs * 24) + extraHeight + 80 // 估算实际渲染高度
           };
         });
 
