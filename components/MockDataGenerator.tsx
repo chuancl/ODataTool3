@@ -15,8 +15,6 @@ const MockDataGenerator: React.FC<Props> = ({ url, version }) => {
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const [generatedCode, setGeneratedCode] = useState('');
 
-  // 模拟生成数据逻辑
-  // 实际应用中应解析 Metadata 获取字段类型，然后映射到 Faker 函数
   const generateData = () => {
     const num = parseInt(count) || 5;
     const newData = Array.from({ length: num }).map((_, i) => ({
@@ -30,14 +28,12 @@ const MockDataGenerator: React.FC<Props> = ({ url, version }) => {
   };
 
   const handleGenerateCode = () => {
-    // 针对第一条数据生成代码示例
     if (mockData.length === 0) return;
     const code = generateSAPUI5Code('create', 'Products', { data: mockData[0] }, version);
     setGeneratedCode(code);
     onOpen();
   };
 
-  // Table Setup
   const columnHelper = createColumnHelper<any>();
   const columns = mockData.length > 0 ? Object.keys(mockData[0]).map(key => 
     columnHelper.accessor(key, { header: key })
@@ -54,8 +50,8 @@ const MockDataGenerator: React.FC<Props> = ({ url, version }) => {
       <Card>
         <CardBody className="flex flex-row gap-4 items-end">
           <Input label="Quantity" type="number" value={count} onValueChange={setCount} className="max-w-[150px]" />
-          <Button color="primary" onClick={generateData}>Generate Mock Data</Button>
-          <Button color="secondary" isDisabled={mockData.length === 0} onClick={handleGenerateCode}>
+          <Button color="primary" onPress={generateData}>Generate Mock Data</Button>
+          <Button color="secondary" isDisabled={mockData.length === 0} onPress={handleGenerateCode}>
             Generate SAPUI5 Create Code
           </Button>
         </CardBody>

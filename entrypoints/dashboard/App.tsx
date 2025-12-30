@@ -68,14 +68,28 @@ const App: React.FC = () => {
         </nav>
 
         {/* Main Content Area */}
-        <main className="flex-1 p-4 overflow-hidden relative">
+        <main className="flex-1 overflow-hidden relative p-4">
           {odataVersion === 'Unknown' && !isValidating ? (
             <div className="flex flex-col items-center justify-center h-full text-default-400">
               <p>Please enter a valid OData URL and click Parse.</p>
             </div>
           ) : (
-            <Tabs aria-label="Features" color="primary" variant="underlined" className="h-full block">
-              <Tab key="er" title="ER Diagram" className="h-[calc(100%-40px)]">
+            /* 
+               关键修改：使用 Flex 布局确保 Tabs 撑满高度
+               base: 设为 flex flex-col h-full
+               panel: 设为 flex-1 h-full overflow-hidden，强制内容区域占据剩余空间
+            */
+            <Tabs 
+              aria-label="Features" 
+              color="primary" 
+              variant="underlined" 
+              classNames={{
+                base: "h-full flex flex-col",
+                tabList: "flex-none", 
+                panel: "flex-1 h-full overflow-hidden p-0 pt-2"
+              }}
+            >
+              <Tab key="er" title="ER Diagram">
                 <Card className="h-full shadow-sm">
                   <CardBody className="p-0 overflow-hidden h-full">
                      {/* ER图组件，传入URL以便内部获取Metadata解析 */}
@@ -83,14 +97,14 @@ const App: React.FC = () => {
                   </CardBody>
                 </Card>
               </Tab>
-              <Tab key="query" title="Query Builder" className="h-[calc(100%-40px)]">
+              <Tab key="query" title="Query Builder">
                 <Card className="h-full overflow-y-auto shadow-sm">
                   <CardBody>
                     <QueryBuilder url={url} version={odataVersion} />
                   </CardBody>
                 </Card>
               </Tab>
-              <Tab key="mock" title="Mock Data" className="h-[calc(100%-40px)]">
+              <Tab key="mock" title="Mock Data">
                 <Card className="h-full overflow-y-auto shadow-sm">
                   <CardBody>
                     <MockDataGenerator url={url} version={odataVersion} />

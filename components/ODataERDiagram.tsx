@@ -86,22 +86,18 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
           position: { x: 0, y: 0 } // 初始位置，后面由 ELK 计算
         }));
 
-        // 2. 构建初始 Edges (基于 Navigation Properties 或 Association)
+        // 2. 构建初始 Edges
         const initialEdges: Edge[] = [];
         entities.forEach(entity => {
           entity.navigationProperties.forEach((nav: any) => {
-            // 这里为了简化，假设 Navigation 的 Type 比如 "NorthwindModel.Category" 最后一部分是实体名
             const targetName = nav.type ? nav.type.split('.').pop() : null; 
-            
-            // 如果是 V2，可能需要查找 Association 来确定 target
-            // 简单处理：如果能找到对应的 target node 就算一条边
             if (targetName) {
               initialEdges.push({
                 id: `${entity.name}-${targetName}`,
                 source: entity.name,
                 target: targetName,
                 markerEnd: { type: MarkerType.ArrowClosed },
-                type: 'smoothstep', // 使用直角连线减少交叉
+                type: 'smoothstep', 
                 animated: false,
                 style: { stroke: '#b1b1b7' }
               });
@@ -145,15 +141,12 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
     loadData();
   }, [url]);
 
-  // 高亮相关实体的逻辑
   const onNodeClick = useCallback((event: any, node: any) => {
-    // 简单实现：高亮选中节点和直接相连的节点，其他变暗
-    // 实际项目中可以结合 ctrl 键做多选逻辑
     const connectedEdgeIds = edges.filter(e => e.source === node.id || e.target === node.id);
     const connectedNodeIds = new Set(connectedEdgeIds.flatMap(e => [e.source, e.target]));
     
     setNodes((nds) => nds.map((n) => {
-      const isRelated = connectedNodeIds.has(n.id);
+      const isRelated = connectedNodeIds.has(n.id) || n.id === node.id;
       return {
         ...n,
         style: { 
@@ -173,7 +166,6 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
     })));
   }, [edges, setNodes, setEdges]);
 
-  // 重置视图
   const resetView = () => {
      setNodes((nds) => nds.map(n => ({...n, style: { opacity: 1 }})));
      setEdges((eds) => eds.map(e => ({...e, style: { stroke: '#b1b1b7', strokeWidth: 1 }})));
@@ -183,7 +175,7 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
     <div className="w-full h-full relative" style={{ height: '100%', minHeight: '400px' }}>
       {loading && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80">Loading Layout...</div>}
       <div className="absolute top-4 right-4 z-10">
-        <Button size="sm" onClick={resetView}>Reset Highlight</Button>
+        <Button size="sm" onPress={resetView}>Reset Highlight</Button>
       </div>
       <ReactFlow
         nodes={nodes}

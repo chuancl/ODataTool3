@@ -36,20 +36,16 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
   const [codePreview, setCodePreview] = useState('');
   const [modalAction, setModalAction] = useState<'delete'|'update'>('delete');
 
-  // Fetch Entity Sets on load (Simplified: assume we can regex them from metadata or service doc)
   useEffect(() => {
     if(!url) return;
-    fetch(url) // calling base service url often returns entity sets in V2/V4
-      .then(r => r.json().catch(() => r.text())) // V2 might return XML
+    fetch(url) 
+      .then(r => r.json().catch(() => r.text())) 
       .then(data => {
-        // Mocking extraction for demo. In prod, parse XML/JSON properly
-        // 这里为了演示，假设我们手动解析或从 metadata 解析到了 'Products', 'Orders' 等
         setEntitySets(['Products', 'Orders', 'Customers', 'Employees']); 
         setSelectedEntity('Products');
       });
   }, [url]);
 
-  // Update Generated URL
   useEffect(() => {
     if (!selectedEntity) return;
     const baseUrl = url.endsWith('/') ? url : `${url}/`;
@@ -67,7 +63,6 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
     setGeneratedUrl(`${baseUrl}${selectedEntity}?${params.toString()}`);
   }, [url, selectedEntity, filter, select, expand, top, skip, count, version]);
 
-  // Execute Query
   const executeQuery = async () => {
     setLoading(true);
     try {
@@ -84,26 +79,22 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
     }
   };
 
-  // Generate SAPUI5 Read Code
   const copyReadCode = () => {
     const code = generateSAPUI5Code('read', selectedEntity, {
-      filters: filter ? [{field: 'Manual', operator: 'EQ', value: filter}] : [], // Simplified for demo
+      filters: filter ? [{field: 'Manual', operator: 'EQ', value: filter}] : [], 
       expand, select, top, skip, inlinecount: count
     }, version);
     navigator.clipboard.writeText(code);
     alert("SAPUI5 Read Code Copied!");
   };
 
-  // Handle Delete Button in Table
   const handleDelete = () => {
-    // Generate delete code for selected rows (Mock: pick first selected)
     const code = generateSAPUI5Code('delete', selectedEntity, { key: "(ID=1)" }, version);
     setCodePreview(code);
     setModalAction('delete');
     onOpen();
   };
 
-  // Setup TanStack Table
   const columnHelper = createColumnHelper<any>();
   const columns = queryResult.length > 0 ? Object.keys(queryResult[0]).map(key => 
     columnHelper.accessor(key, { header: key, cell: info => String(info.getValue()) })
@@ -117,7 +108,6 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 1. Configuration Area */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg bg-content2">
         <Select label="Entity Set" selectedKeys={[selectedEntity]} onChange={(e) => setSelectedEntity(e.target.value)}>
           {entitySets.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
@@ -134,19 +124,16 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
         </div>
       </div>
 
-      {/* 2. URL Bar */}
       <div className="flex gap-2">
         <Input value={generatedUrl} readOnly className="flex-1" />
-        <Button isIconOnly onClick={copyReadCode} title="Copy SAPUI5 Code"><Copy size={16} /></Button>
-        <Button color="primary" onClick={executeQuery} isLoading={loading} startContent={<Play size={16} />}>Run</Button>
+        <Button isIconOnly onPress={copyReadCode} title="Copy SAPUI5 Code"><Copy size={16} /></Button>
+        <Button color="primary" onPress={executeQuery} isLoading={loading} startContent={<Play size={16} />}>Run</Button>
       </div>
 
-      {/* 3. Results Area */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[500px]">
-        {/* Table View */}
         <div className="border rounded-lg p-2 overflow-auto bg-content1 relative">
            <div className="sticky top-0 z-10 bg-content1 p-2 flex gap-2 border-b">
-             <Button size="sm" color="danger" variant="flat" onClick={handleDelete} startContent={<Trash size={14}/>}>Delete Selected</Button>
+             <Button size="sm" color="danger" variant="flat" onPress={handleDelete} startContent={<Trash size={14}/>}>Delete Selected</Button>
              <Button size="sm" color="primary" variant="flat" startContent={<Save size={14}/>}>Export CSV</Button>
            </div>
            <table className="w-full text-left border-collapse">
@@ -176,7 +163,6 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
            {queryResult.length === 0 && <div className="p-4 text-center text-default-400">No data loaded</div>}
         </div>
 
-        {/* JSON View */}
         <div className="border rounded-lg p-0 bg-[#1e1e1e] text-white overflow-hidden flex flex-col">
           <div className="p-2 border-b border-gray-700 flex justify-between">
             <span className="text-xs font-bold">JSON Response</span>
@@ -188,7 +174,6 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
         </div>
       </div>
 
-      {/* Code Generation Modal */}
       <Modal isOpen={isOpen} onOpenChange={onOpenChange} size="2xl">
         <ModalContent>
           {(onClose) => (
