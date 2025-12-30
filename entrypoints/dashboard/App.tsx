@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { NextUIProvider, Tabs, Tab, Card, CardBody, Input, Button, Chip } from "@nextui-org/react";
+import { HeroUIProvider, Tabs, Tab, Card, CardBody, Input, Button, Chip } from "@heroui/react";
 import { detectODataVersion, ODataVersion } from '@/utils/odata-helper';
 import ODataERDiagram from '@/components/ODataERDiagram';
 import QueryBuilder from '@/components/QueryBuilder';
@@ -14,6 +14,7 @@ const App: React.FC = () => {
   const [odataVersion, setOdataVersion] = useState<ODataVersion>('Unknown');
   const [isValidating, setIsValidating] = useState(false);
 
+  // 初始化从 Hash 读取 URL
   useEffect(() => {
     const hash = window.location.hash;
     if (hash.includes('url=')) {
@@ -34,9 +35,14 @@ const App: React.FC = () => {
   const handleUrlChange = (val: string) => setUrl(val);
 
   return (
-    <NextUIProvider>
+    <HeroUIProvider>
+      {/* 
+         外层容器：负责控制暗黑模式类名 (dark) 和全屏布局 
+         overflow-hidden 防止页面出现双重滚动条
+      */}
       <div className={`${isDark ? 'dark' : ''} text-foreground bg-background h-screen w-screen flex flex-col overflow-hidden`}>
-        {/* Navigation */}
+        
+        {/* 顶部导航栏 */}
         <nav className="h-16 border-b border-divider px-6 flex items-center justify-between bg-content1 shrink-0 z-50">
           <div className="flex items-center gap-4">
             <span className="text-xl font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
@@ -72,7 +78,7 @@ const App: React.FC = () => {
           </Button>
         </nav>
 
-        {/* Main Content */}
+        {/* 主内容区域 */}
         <main className="flex-1 w-full h-full relative overflow-hidden bg-content2/50 p-4">
           {odataVersion === 'Unknown' && !isValidating ? (
             <div className="flex flex-col items-center justify-center h-full text-default-400">
@@ -86,7 +92,7 @@ const App: React.FC = () => {
               classNames={{
                 base: "h-full w-full flex flex-col",
                 tabList: "flex-none p-0", 
-                panel: "flex-1 w-full h-full p-0 pt-2 overflow-hidden"
+                panel: "flex-1 w-full h-full p-0 pt-2 overflow-hidden" // 确保 Tab 面板占满剩余高度
               }}
             >
               <Tab key="er" title="ER Diagram" className="h-full w-full">
@@ -114,7 +120,7 @@ const App: React.FC = () => {
           )}
         </main>
       </div>
-    </NextUIProvider>
+    </HeroUIProvider>
   );
 };
 

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Input, Button, Select, SelectItem, Checkbox, 
-  Textarea, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure,
+  Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure,
   Code, ScrollShadow, Selection
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { useReactTable, getCoreRowModel, flexRender, createColumnHelper } from '@tanstack/react-table';
 import { generateSAPUI5Code, ODataVersion } from '@/utils/odata-helper';
 import { Copy, Play, Trash, Save } from 'lucide-react';
@@ -39,10 +39,9 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
   useEffect(() => {
     if(!url) return;
     const baseUrl = url.endsWith('/') ? url.slice(0, -1) : url;
-    // 获取 Metadata 列表 (简化版：只尝试获取 Service Document)
+    // 获取 Metadata 列表
     fetch(baseUrl, { headers: { 'Accept': 'application/json' } }) 
       .then(async r => {
-        // 修复: 不能同时调用 json() 和 text()。先读 text 再尝试 parse
         const text = await r.text();
         try {
           return JSON.parse(text);
@@ -51,14 +50,12 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
         }
       }) 
       .then(data => {
-        // 尝试从 standard OData service document 结构中提取 EntitySets
         let sets: string[] = [];
         if (data && data.d && Array.isArray(data.d.EntitySets)) {
              sets = data.d.EntitySets; // V2
         } else if (data && data.value && Array.isArray(data.value)) {
              sets = data.value.map((v: any) => v.name); // V4
         } else {
-             // Fallback default for demo if parse fails
              sets = ['Products', 'Orders', 'Customers', 'Employees', 'Suppliers', 'Categories']; 
         }
         setEntitySets(sets);
@@ -131,7 +128,7 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
 
   const columnHelper = createColumnHelper<any>();
   const columns = queryResult.length > 0 ? Object.keys(queryResult[0])
-    .filter(key => typeof queryResult[0][key] !== 'object') // 简单过滤掉复杂对象
+    .filter(key => typeof queryResult[0][key] !== 'object') 
     .map(key => 
       columnHelper.accessor(key, { header: key, cell: info => String(info.getValue()) })
   ) : [];
@@ -171,6 +168,7 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[500px]">
+        {/* 数据表格区域 */}
         <div className="border rounded-lg p-2 overflow-auto bg-content1 relative flex flex-col">
            <div className="sticky top-0 z-10 bg-content1 p-2 flex gap-2 border-b shrink-0">
              <Button size="sm" color="danger" variant="flat" onPress={handleDelete} startContent={<Trash size={14}/>}>Delete Selected</Button>
@@ -206,6 +204,7 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
            </div>
         </div>
 
+        {/* JSON 展示区域 */}
         <div className="border rounded-lg p-0 bg-[#1e1e1e] text-white overflow-hidden flex flex-col">
           <div className="p-2 border-b border-gray-700 flex justify-between shrink-0">
             <span className="text-xs font-bold">JSON Response</span>

@@ -13,14 +13,16 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import ELK from 'elkjs/lib/elk.bundled.js';
 import { parseMetadataToSchema } from '@/utils/odata-helper';
-import { Tooltip, Button } from "@nextui-org/react";
+import { Tooltip, Button } from "@heroui/react";
 import { Key } from 'lucide-react';
 
 const elk = new ELK();
 
+// 实体节点组件
 const EntityNode = ({ data, selected }: NodeProps) => {
   return (
     <div className={`border-2 rounded-md min-w-[150px] bg-content1 transition-all ${selected ? 'border-primary shadow-lg' : 'border-default-300'}`}>
+      {/* 定义连接点 Handles */}
       <Handle type="target" position={Position.Top} className="!bg-primary" />
       <Handle type="source" position={Position.Top} className="!bg-primary" />
       <Handle type="target" position={Position.Right} className="!bg-primary" />
@@ -30,12 +32,14 @@ const EntityNode = ({ data, selected }: NodeProps) => {
       <Handle type="target" position={Position.Left} className="!bg-primary" />
       <Handle type="source" position={Position.Left} className="!bg-primary" />
 
+      {/* 标题栏 */}
       <Tooltip content={<div className="p-2"><p className="font-bold">{data.label}</p><p className="text-xs text-default-500">Click to focus related</p></div>}>
         <div className="bg-default-100 p-2 font-bold text-center border-b border-default-300 text-sm">
           {data.label}
         </div>
       </Tooltip>
 
+      {/* 属性列表 */}
       <div className="p-2 flex flex-col gap-1">
         {data.properties.slice(0, 8).map((prop: any) => (
           <Tooltip key={prop.name} content={`Type: ${prop.type}`}>
@@ -73,6 +77,7 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
         const xml = await res.text();
         const { entities, associations } = parseMetadataToSchema(xml);
 
+        // 初始化节点
         const initialNodes = entities.map((e) => ({
           id: e.name,
           type: 'entity',
@@ -80,6 +85,7 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
           position: { x: 0, y: 0 }
         }));
 
+        // 初始化连线
         const initialEdges: Edge[] = [];
         entities.forEach(entity => {
           entity.navigationProperties.forEach((nav: any) => {
@@ -98,6 +104,7 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
           });
         });
 
+        // 使用 ELK 进行自动布局
         const elkGraph = {
           id: 'root',
           layoutOptions: {
@@ -113,6 +120,7 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
 
         const layoutedGraph = await elk.layout(elkGraph);
 
+        // 应用布局坐标
         const layoutedNodes = initialNodes.map(node => {
           const elkNode = layoutedGraph.children?.find(n => n.id === node.id);
           return {
@@ -133,6 +141,7 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
     loadData();
   }, [url]);
 
+  // 点击节点高亮关联逻辑
   const onNodeClick = useCallback((event: any, node: any) => {
     const connectedEdgeIds = edges.filter(e => e.source === node.id || e.target === node.id);
     const connectedNodeIds = new Set(connectedEdgeIds.flatMap(e => [e.source, e.target]));
@@ -158,6 +167,7 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
     })));
   }, [edges, setNodes, setEdges]);
 
+  // 重置高亮
   const resetView = () => {
      setNodes((nds) => nds.map(n => ({...n, style: { opacity: 1 }})));
      setEdges((eds) => eds.map(e => ({...e, style: { stroke: '#b1b1b7', strokeWidth: 1 }})));

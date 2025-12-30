@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { NextUIProvider, Button, Input, Switch, Card, CardBody, Divider } from "@nextui-org/react";
+import { HeroUIProvider, Button, Input, Switch, Card, CardBody, Divider } from "@heroui/react";
 import { getSettings, saveSettings, AppSettings } from '@/utils/storage';
 import { Settings, ExternalLink, Plus, Trash2 } from 'lucide-react';
 import { browser } from 'wxt/browser';
@@ -55,7 +55,7 @@ const App: React.FC = () => {
   if (!settings) return <div className="p-4">Loading...</div>;
 
   return (
-    <NextUIProvider>
+    <HeroUIProvider>
       <div className="w-[350px] p-4 bg-background text-foreground min-h-[400px]">
         <header className="flex items-center gap-2 mb-4">
           <Settings className="w-6 h-6 text-primary" />
@@ -102,7 +102,7 @@ const App: React.FC = () => {
           </div>
         </section>
       </div>
-    </NextUIProvider>
+    </HeroUIProvider>
   );
 };
 

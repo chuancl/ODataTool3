@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Input, Select, SelectItem, Card, CardBody, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Code } from "@nextui-org/react";
+import { Button, Input, Card, CardBody, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Code } from "@heroui/react";
 import { faker } from '@faker-js/faker';
 import { ODataVersion, generateSAPUI5Code } from '@/utils/odata-helper';
 import { useReactTable, getCoreRowModel, flexRender, createColumnHelper } from '@tanstack/react-table';
