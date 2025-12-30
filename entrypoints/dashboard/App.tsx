@@ -35,7 +35,7 @@ const App: React.FC = () => {
 
   return (
     <NextUIProvider>
-      <div className={`${isDark ? 'dark' : ''} text-foreground bg-background w-screen h-screen flex flex-col overflow-hidden`}>
+      <div className={`${isDark ? 'dark' : ''} text-foreground bg-background h-screen w-screen flex flex-col overflow-hidden`}>
         {/* Navigation */}
         <nav className="h-16 border-b border-divider px-6 flex items-center justify-between bg-content1 shrink-0 z-50">
           <div className="flex items-center gap-4">
