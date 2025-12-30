@@ -8,7 +8,8 @@ import ReactFlow, {
   Handle,
   Position,
   NodeProps,
-  Edge
+  Edge,
+  SmoothStepEdge
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import ELK from 'elkjs/lib/elk.bundled.js';
@@ -18,14 +19,13 @@ import { Key } from 'lucide-react';
 
 const elk = new ELK();
 
-// 生成随机且区分度高的颜色
-const generateColor = (str: string) => {
+// 生成字符串 Hash
+const generateHashCode = (str: string) => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
-  const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
-  return '#' + '00000'.substring(0, 6 - c.length) + c;
+  return hash;
 };
 
 // 预定义一组好看的颜色作为 fallback
@@ -118,10 +118,10 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
             return;
         }
 
-        // 1. 预计算：为了给字段上色，我们需要先遍历一遍关系
+        // 1. 预计算 & 关系去重
         const fieldColorMap: Record<string, Record<string, string>> = {}; // Entity -> Field -> Color
         const rawEdges: any[] = [];
-        let edgeColorIndex = 0;
+        const processedPairs = new Set<string>(); // 用于防止双向关系导致的重影
 
         // 辅助：获取或初始化实体的颜色Map
         const setFieldColor = (entityName: string, fieldName: string, color: string) => {
@@ -140,16 +140,26 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                 if (entity.name === targetName) return;
 
                 if (targetName && entities.find(n => n.name === targetName)) {
-                    // 生成连线颜色
-                    const edgeColor = getColor(edgeColorIndex++);
+                    // 生成唯一的关系键 (A-B 和 B-A 视为同一个)
+                    const pairKey = [entity.name, targetName].sort().join('::');
                     
-                    // 处理字段染色 (如果有引用约束)
+                    // 基于关系键生成稳定颜色
+                    const colorIndex = Math.abs(generateHashCode(pairKey));
+                    const edgeColor = getColor(colorIndex);
+                    
+                    // 处理字段染色 (始终执行，保证双向字段都高亮)
                     if (nav.constraints && nav.constraints.length > 0) {
                         nav.constraints.forEach((c: any) => {
                             setFieldColor(entity.name, c.sourceProperty, edgeColor);
                             setFieldColor(targetName, c.targetProperty, edgeColor);
                         });
                     }
+
+                    // 检查是否已添加过该关系（解决重影问题）
+                    if (processedPairs.has(pairKey)) {
+                        return;
+                    }
+                    processedPairs.add(pairKey);
 
                     // 构建 Label 显示基数: "NavName (1 : n)"
                     const sMult = nav.sourceMultiplicity || '?';
@@ -161,14 +171,14 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                         source: entity.name,
                         target: targetName,
                         label: label,
-                        color: edgeColor // 暂存颜色供 edge style 使用
+                        color: edgeColor // 暂存颜色
                     });
                 }
             }
           });
         });
 
-        // 2. 初始化节点 (附带字段颜色信息)
+        // 2. 初始化节点
         const initialNodes = entities.map((e) => ({
           id: e.name,
           type: 'entity',
@@ -176,30 +186,31 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
             label: e.name, 
             properties: e.properties, 
             keys: e.keys,
-            fieldColors: fieldColorMap[e.name] || {} // 注入颜色信息
+            fieldColors: fieldColorMap[e.name] || {} 
           },
           position: { x: 0, y: 0 }
         }));
 
-        // 3. 计算尺寸
+        // 3. 计算尺寸 (虚拟尺寸比实际渲染大，增加间距)
         const getNodeDimensions = (propCount: number) => {
             const visibleProps = Math.min(propCount, 12);
-            return { width: 300, height: 45 + visibleProps * 24 + 35 + 50 };
+            // 宽度设大一些，防止连线贴边
+            return { width: 350, height: 45 + visibleProps * 24 + 35 + 80 };
         };
 
-        // 4. ELK 布局
+        // 4. ELK 布局配置
         const elkGraph = {
           id: 'root',
           layoutOptions: {
             'elk.algorithm': 'layered',
             'elk.direction': 'RIGHT',
-            'elk.spacing.nodeNode': '100', 
-            'elk.layered.spacing.nodeNodeBetweenLayers': '250', 
+            'elk.spacing.nodeNode': '150', // 增加节点垂直间距
+            'elk.layered.spacing.nodeNodeBetweenLayers': '300', // 增加层间距
             'elk.edgeRouting': 'ORTHOGONAL',
-            'elk.layered.spacing.edgeNodeBetweenLayers': '80',
+            'elk.layered.spacing.edgeNodeBetweenLayers': '100',
             'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
             'elk.layered.nodePlacement.favorStraightEdges': 'true',
-            'elk.spacing.componentComponent': '150',
+            'elk.spacing.componentComponent': '200',
           },
           children: initialNodes.map(n => ({ id: n.id, ...getNodeDimensions(n.data.properties.length) })), 
           edges: rawEdges.map(e => ({ id: e.id, sources: [e.source], targets: [e.target] }))
@@ -213,12 +224,12 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
           return {
             ...node,
             position: { x: elkNode?.x || 0, y: elkNode?.y || 0 },
-            width: 220,
+            width: 220, // 实际渲染宽度
             height: node.data.properties.length * 24 + 60
           };
         });
 
-        // 6. 生成最终 Edge 对象
+        // 6. 生成最终 Edge 对象 (优化路径逻辑)
         const finalEdges = rawEdges.map(e => {
             const sourceNode = layoutedNodes.find(n => n.id === e.source);
             const targetNode = layoutedNodes.find(n => n.id === e.target);
@@ -231,7 +242,9 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
             let sourceHandle = 'source-right';
             let targetHandle = 'target-left';
 
-            if (Math.abs(dx) < 200) {
+            // 优化：垂直对齐或水平距离较近时，强制使用右侧绕行策略，避免穿过节点
+            // 增加距离判定阈值
+            if (Math.abs(dx) < 250) { 
                 sourceHandle = 'source-right';
                 targetHandle = 'target-right';
             } else if (dx > 0) {
@@ -249,13 +262,15 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                 sourceHandle: sourceHandle,
                 targetHandle: targetHandle,
                 type: 'smoothstep',
-                markerEnd: { type: MarkerType.ArrowClosed, color: e.color }, // 箭头颜色
+                // 增加 pathOptions.offset 使得绕行半径更大，避免压线
+                pathOptions: { borderRadius: 30, offset: 40 },
+                markerEnd: { type: MarkerType.ArrowClosed, color: e.color }, 
                 animated: false,
-                style: { stroke: e.color, strokeWidth: 1.5, opacity: 0.8 }, // 连线颜色
+                style: { stroke: e.color, strokeWidth: 1.5, opacity: 0.8 },
                 label: e.label,
-                labelStyle: { fill: e.color, fontWeight: 700, fontSize: 10 }, // 标签颜色
-                labelBgStyle: { fill: '#ffffff', fillOpacity: 0.7, rx: 4, ry: 4 }, // 标签背景
-                data: { label: e.label, originalColor: e.color } // 保存原始颜色用于交互恢复
+                labelStyle: { fill: e.color, fontWeight: 700, fontSize: 10 },
+                labelBgStyle: { fill: '#ffffff', fillOpacity: 0.7, rx: 4, ry: 4 },
+                data: { label: e.label, originalColor: e.color } 
             };
         }).filter(Boolean) as Edge[];
 
