@@ -4,6 +4,7 @@ import { NextUIProvider, Button, Input, Switch, Card, CardBody, Divider } from "
 import { getSettings, saveSettings, AppSettings } from '@/utils/storage';
 import { Settings, ExternalLink, Plus, Trash2 } from 'lucide-react';
 import { browser } from 'wxt/browser';
+import '@/assets/main.css';
 
 const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -69,7 +70,7 @@ const App: React.FC = () => {
             onValueChange={setManualInput}
             className="mb-2"
           />
-          <Button color="primary" fullWidth endContent={<ExternalLink size={16}/>} onClick={() => openDashboard()}>
+          <Button color="primary" fullWidth endContent={<ExternalLink size={16}/>} onPress={() => openDashboard()}>
             Parse & Visualization
           </Button>
         </section>
@@ -85,14 +86,14 @@ const App: React.FC = () => {
           <h3 className="text-sm font-bold mb-2">Whitelist (Always Check)</h3>
           <div className="flex gap-1 mb-2">
             <Input size="sm" placeholder="Domain or URL" value={newUrl} onValueChange={setNewUrl} />
-            <Button isIconOnly size="sm" color="success" onClick={addToWhitelist}><Plus size={16} /></Button>
+            <Button isIconOnly size="sm" color="success" onPress={addToWhitelist}><Plus size={16} /></Button>
           </div>
           <div className="flex flex-col gap-1 max-h-[150px] overflow-y-auto">
             {settings.whitelist.map((url, idx) => (
               <Card key={idx} className="w-full" shadow="sm">
                 <CardBody className="p-2 flex flex-row justify-between items-center">
                   <span className="text-xs truncate max-w-[220px]">{url}</span>
-                  <Button isIconOnly size="sm" variant="light" color="danger" onClick={() => removeFromWhitelist(url)}>
+                  <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => removeFromWhitelist(url)}>
                     <Trash2 size={14} />
                   </Button>
                 </CardBody>

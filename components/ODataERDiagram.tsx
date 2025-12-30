@@ -13,7 +13,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import ELK from 'elkjs/lib/elk.bundled.js';
 import { parseMetadataToSchema } from '@/utils/odata-helper';
-import { Tooltip, Card, CardBody, Button, ButtonGroup } from "@nextui-org/react";
+import { Tooltip, Button } from "@nextui-org/react";
 import { Key } from 'lucide-react';
 
 const elk = new ELK();
@@ -180,7 +180,7 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
   };
 
   return (
-    <div className="w-full h-full relative">
+    <div className="w-full h-full relative" style={{ height: '100%', minHeight: '400px' }}>
       {loading && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80">Loading Layout...</div>}
       <div className="absolute top-4 right-4 z-10">
         <Button size="sm" onClick={resetView}>Reset Highlight</Button>

@@ -1,5 +1,3 @@
-import { xml2js } from 'xml-js';
-
 export type ODataVersion = 'V2' | 'V3' | 'V4' | 'Unknown';
 
 interface EntityType {
@@ -17,7 +15,12 @@ interface Association {
 // 1. OData 检测与版本识别
 export const detectODataVersion = async (url: string): Promise<ODataVersion> => {
   try {
-    const metadataUrl = url.endsWith('$metadata') ? url : `${url.replace(/\/$/, '')}/$metadata`;
+    // 简单清理 URL
+    let metadataUrl = url;
+    if (!url.endsWith('$metadata')) {
+        metadataUrl = url.endsWith('/') ? `${url}$metadata` : `${url}/$metadata`;
+    }
+
     const response = await fetch(metadataUrl);
     const text = await response.text();
     
@@ -36,54 +39,85 @@ export const detectODataVersion = async (url: string): Promise<ODataVersion> => 
   }
 };
 
-// 2. 解析 Metadata (简化版，用于提取 ER 图所需信息)
+// 2. 解析 Metadata (使用 DOMParser 替代 xml-js)
 export const parseMetadataToSchema = (xmlText: string) => {
-  const result = xml2js(xmlText, { compact: true }) as any;
-  const schemas = result['edmx:Edmx']?.['edmx:DataServices']?.['Schema'];
-  // 处理可能有多个 Schema 的情况
-  const schema = Array.isArray(schemas) ? schemas[0] : schemas;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, "application/xml");
   
-  if (!schema) return { entities: [], associations: [] };
+  // 查找 Schema 节点 (处理命名空间)
+  const schemas = doc.getElementsByTagName("Schema"); // 简单处理，忽略命名空间前缀
+  // 也可以使用 getElementsByTagNameNS if strictly required
+  
+  if (!schemas || schemas.length === 0) return { entities: [], associations: [] };
+
+  // 通常取第一个主要的 Schema
+  const schema = schemas[0];
+  const namespace = schema.getAttribute("Namespace");
 
   const entities: EntityType[] = [];
   const associations: Association[] = [];
 
-  const entityTypes = Array.isArray(schema.EntityType) ? schema.EntityType : [schema.EntityType].filter(Boolean);
-  const assocTypes = Array.isArray(schema.Association) ? schema.Association : [schema.Association].filter(Boolean);
+  const entityTypes = schema.getElementsByTagName("EntityType");
+  const assocTypes = schema.getElementsByTagName("Association");
 
   // 解析实体
-  entityTypes.forEach((et: any) => {
-    const props = Array.isArray(et.Property) ? et.Property : [et.Property].filter(Boolean);
-    const keys = et.Key ? (Array.isArray(et.Key.PropertyRef) ? et.Key.PropertyRef.map((k: any) => k._attributes.Name) : [et.Key.PropertyRef._attributes.Name]) : [];
-    const navProps = et.NavigationProperty ? (Array.isArray(et.NavigationProperty) ? et.NavigationProperty : [et.NavigationProperty]) : [];
+  for (let i = 0; i < entityTypes.length; i++) {
+    const et = entityTypes[i];
+    const name = et.getAttribute("Name") || "Unknown";
+    
+    // 解析 Keys
+    const keys: string[] = [];
+    const keyNode = et.getElementsByTagName("Key")[0];
+    if (keyNode) {
+        const propRefs = keyNode.getElementsByTagName("PropertyRef");
+        for (let k = 0; k < propRefs.length; k++) {
+            keys.push(propRefs[k].getAttribute("Name") || "");
+        }
+    }
 
-    entities.push({
-      name: et._attributes.Name,
-      keys,
-      properties: props.map((p: any) => ({ name: p._attributes.Name, type: p._attributes.Type })),
-      navigationProperties: navProps.map((np: any) => ({
-        name: np._attributes.Name,
-        relationship: np._attributes.Relationship, // V2
-        toRole: np._attributes.ToRole, // V2
-        type: np._attributes.Type // V4
-      }))
-    });
-  });
+    // 解析 Properties
+    const properties: { name: string; type: string }[] = [];
+    const props = et.getElementsByTagName("Property");
+    for (let p = 0; p < props.length; p++) {
+        properties.push({
+            name: props[p].getAttribute("Name") || "",
+            type: props[p].getAttribute("Type") || ""
+        });
+    }
+
+    // 解析 NavigationProperties
+    const navProps: any[] = [];
+    const navs = et.getElementsByTagName("NavigationProperty");
+    for (let n = 0; n < navs.length; n++) {
+        navProps.push({
+            name: navs[n].getAttribute("Name"),
+            relationship: navs[n].getAttribute("Relationship"), // V2/V3
+            toRole: navs[n].getAttribute("ToRole"), // V2/V3
+            type: navs[n].getAttribute("Type") // V4
+        });
+    }
+
+    entities.push({ name, keys, properties, navigationProperties: navProps });
+  }
 
   // 解析关联 (V2/V3)
-  assocTypes.forEach((at: any) => {
-    const ends = Array.isArray(at.End) ? at.End : [at.End];
-    associations.push({
-      name: at._attributes.Name,
-      ends: ends.map((e: any) => ({
-        role: e._attributes.Role,
-        type: e._attributes.Type,
-        multiplicity: e._attributes.Multiplicity
-      }))
-    });
-  });
+  for (let i = 0; i < assocTypes.length; i++) {
+    const at = assocTypes[i];
+    const name = at.getAttribute("Name") || "";
+    const endsData = [];
+    const ends = at.getElementsByTagName("End");
+    
+    for (let j = 0; j < ends.length; j++) {
+        endsData.push({
+            role: ends[j].getAttribute("Role") || "",
+            type: ends[j].getAttribute("Type") || "",
+            multiplicity: ends[j].getAttribute("Multiplicity") || ""
+        });
+    }
+    associations.push({ name, ends: endsData });
+  }
 
-  return { entities, associations, namespace: schema._attributes.Namespace };
+  return { entities, associations, namespace };
 };
 
 // 3. SAPUI5 代码生成器
