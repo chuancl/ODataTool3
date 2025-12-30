@@ -148,12 +148,14 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
           layoutOptions: {
             'elk.algorithm': 'layered',
             'elk.direction': 'RIGHT',
-            'elk.spacing.nodeNode': '100',
-            'elk.layered.spacing.nodeNodeBetweenLayers': '150',
+            'elk.spacing.nodeNode': '180', // 增加节点间距
+            'elk.layered.spacing.nodeNodeBetweenLayers': '250', // 增加层间距
             'elk.edgeRouting': 'ORTHOGONAL',
-            'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF'
+            'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+            'elk.spacing.componentComponent': '200', // 增加独立组件间距
+            'elk.layered.spacing.edgeNodeBetweenLayers': '80' // 增加线与节点穿过层的间距
           },
-          children: initialNodes.map(n => ({ id: n.id, width: 220, height: 200 })), 
+          children: initialNodes.map(n => ({ id: n.id, width: 240, height: 240 })), 
           edges: initialEdges.map(e => ({ id: e.id, sources: [e.source], targets: [e.target] }))
         };
 
