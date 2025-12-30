@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Input, Button, Select, SelectItem, Checkbox, 
   Textarea, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure,
-  Code, ScrollShadow
+  Code, ScrollShadow, Selection
 } from "@nextui-org/react";
 import { useReactTable, getCoreRowModel, flexRender, createColumnHelper } from '@tanstack/react-table';
 import { generateSAPUI5Code, ODataVersion } from '@/utils/odata-helper';
@@ -15,7 +15,7 @@ interface Props {
 
 const QueryBuilder: React.FC<Props> = ({ url, version }) => {
   const [entitySets, setEntitySets] = useState<string[]>([]);
-  const [selectedEntity, setSelectedEntity] = useState('');
+  const [selectedEntity, setSelectedEntity] = useState<string>('');
   
   // Params State
   const [filter, setFilter] = useState('');
@@ -38,11 +38,31 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
 
   useEffect(() => {
     if(!url) return;
-    fetch(url) 
-      .then(r => r.json().catch(() => r.text())) 
+    const baseUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+    // 获取 Metadata 列表 (简化版：只尝试获取 Service Document)
+    fetch(baseUrl, { headers: { 'Accept': 'application/json' } }) 
+      .then(async r => {
+        // 修复: 不能同时调用 json() 和 text()。先读 text 再尝试 parse
+        const text = await r.text();
+        try {
+          return JSON.parse(text);
+        } catch {
+          return null;
+        }
+      }) 
       .then(data => {
-        setEntitySets(['Products', 'Orders', 'Customers', 'Employees']); 
-        setSelectedEntity('Products');
+        // 尝试从 standard OData service document 结构中提取 EntitySets
+        let sets: string[] = [];
+        if (data && data.d && Array.isArray(data.d.EntitySets)) {
+             sets = data.d.EntitySets; // V2
+        } else if (data && data.value && Array.isArray(data.value)) {
+             sets = data.value.map((v: any) => v.name); // V4
+        } else {
+             // Fallback default for demo if parse fails
+             sets = ['Products', 'Orders', 'Customers', 'Employees', 'Suppliers', 'Categories']; 
+        }
+        setEntitySets(sets);
+        if (sets.length > 0) setSelectedEntity(sets[0]);
       });
   }, [url]);
 
@@ -67,13 +87,22 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
     setLoading(true);
     try {
       const res = await fetch(generatedUrl, { headers: { 'Accept': 'application/json' }});
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error("Invalid JSON Response");
+      }
+
+      // 兼容不同版本的返回结构
       const results = data.d?.results || data.value || (Array.isArray(data) ? data : []);
       setQueryResult(results);
       setRawResult(JSON.stringify(data, null, 2));
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      setRawResult(`Error: ${e}`);
+      setRawResult(`Error: ${e.message || e}`);
+      setQueryResult([]);
     } finally {
       setLoading(false);
     }
@@ -95,9 +124,16 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
     onOpen();
   };
 
+  const handleEntityChange = (keys: Selection) => {
+    const selected = Array.from(keys).join('');
+    setSelectedEntity(selected);
+  };
+
   const columnHelper = createColumnHelper<any>();
-  const columns = queryResult.length > 0 ? Object.keys(queryResult[0]).map(key => 
-    columnHelper.accessor(key, { header: key, cell: info => String(info.getValue()) })
+  const columns = queryResult.length > 0 ? Object.keys(queryResult[0])
+    .filter(key => typeof queryResult[0][key] !== 'object') // 简单过滤掉复杂对象
+    .map(key => 
+      columnHelper.accessor(key, { header: key, cell: info => String(info.getValue()) })
   ) : [];
 
   const table = useReactTable({
@@ -109,7 +145,11 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg bg-content2">
-        <Select label="Entity Set" selectedKeys={[selectedEntity]} onChange={(e) => setSelectedEntity(e.target.value)}>
+        <Select 
+          label="Entity Set" 
+          selectedKeys={selectedEntity ? [selectedEntity] : []} 
+          onSelectionChange={handleEntityChange}
+        >
           {entitySets.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
         </Select>
         <Input label="$filter" placeholder="Price gt 20" value={filter} onValueChange={setFilter} />
@@ -131,40 +171,43 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[500px]">
-        <div className="border rounded-lg p-2 overflow-auto bg-content1 relative">
-           <div className="sticky top-0 z-10 bg-content1 p-2 flex gap-2 border-b">
+        <div className="border rounded-lg p-2 overflow-auto bg-content1 relative flex flex-col">
+           <div className="sticky top-0 z-10 bg-content1 p-2 flex gap-2 border-b shrink-0">
              <Button size="sm" color="danger" variant="flat" onPress={handleDelete} startContent={<Trash size={14}/>}>Delete Selected</Button>
              <Button size="sm" color="primary" variant="flat" startContent={<Save size={14}/>}>Export CSV</Button>
            </div>
-           <table className="w-full text-left border-collapse">
-            <thead>
-              {table.getHeaderGroups().map(headerGroup => (
-                <tr key={headerGroup.id}>
-                  {headerGroup.headers.map(header => (
-                    <th key={header.id} className="border-b p-2 text-sm font-bold bg-default-100">
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody>
-              {table.getRowModel().rows.map(row => (
-                <tr key={row.id} className="hover:bg-default-50">
-                  {row.getVisibleCells().map(cell => (
-                    <td key={cell.id} className="border-b p-2 text-sm">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-           </table>
-           {queryResult.length === 0 && <div className="p-4 text-center text-default-400">No data loaded</div>}
+           
+           <div className="overflow-auto flex-1">
+             <table className="w-full text-left border-collapse">
+              <thead>
+                {table.getHeaderGroups().map(headerGroup => (
+                  <tr key={headerGroup.id}>
+                    {headerGroup.headers.map(header => (
+                      <th key={header.id} className="border-b p-2 text-sm font-bold bg-default-100 whitespace-nowrap">
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                      </th>
+                    ))}
+                  </tr>
+                ))}
+              </thead>
+              <tbody>
+                {table.getRowModel().rows.map(row => (
+                  <tr key={row.id} className="hover:bg-default-50">
+                    {row.getVisibleCells().map(cell => (
+                      <td key={cell.id} className="border-b p-2 text-sm whitespace-nowrap">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+             </table>
+             {queryResult.length === 0 && <div className="p-4 text-center text-default-400">No data loaded</div>}
+           </div>
         </div>
 
         <div className="border rounded-lg p-0 bg-[#1e1e1e] text-white overflow-hidden flex flex-col">
-          <div className="p-2 border-b border-gray-700 flex justify-between">
+          <div className="p-2 border-b border-gray-700 flex justify-between shrink-0">
             <span className="text-xs font-bold">JSON Response</span>
             <Copy size={14} className="cursor-pointer" onClick={() => navigator.clipboard.writeText(rawResult)} />
           </div>
