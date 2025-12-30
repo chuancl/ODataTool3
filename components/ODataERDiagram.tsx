@@ -187,10 +187,11 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                     }
                     processedPairs.add(pairKey);
 
-                    // 构建 Label 显示基数: "NavName (1 : n)"
+                    // 构建双向 Label: "Entity (1 - *) Target"
+                    // sMult 是 Source 端的基数 (e.g. 0..1), tMult 是 Target 端的基数 (e.g. *)
                     const sMult = nav.sourceMultiplicity || '?';
                     const tMult = nav.targetMultiplicity || '?';
-                    const label = `${nav.name} (${sMult} : ${tMult})`;
+                    const label = `${entity.name} (${sMult} - ${tMult}) ${targetName}`;
 
                     rawEdges.push({
                         id: `${entity.name}-${targetName}-${nav.name}`,
@@ -304,6 +305,8 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                 type: 'smoothstep',
                 // 增加 pathOptions.offset 使得绕行半径更大，避免压线
                 pathOptions: { borderRadius: 30, offset: 40 },
+                // 启用双向箭头
+                markerStart: { type: MarkerType.ArrowClosed, color: e.color }, 
                 markerEnd: { type: MarkerType.ArrowClosed, color: e.color }, 
                 animated: false,
                 style: { stroke: e.color, strokeWidth: 1.5, opacity: 0.8 },
@@ -358,6 +361,7 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                 opacity: isDirectlyConnected ? 1 : 0.1, 
                 zIndex: isDirectlyConnected ? 10 : 0
             },
+            markerStart: { type: MarkerType.ArrowClosed, color: color }, // 保持高亮时的双向箭头
             markerEnd: { type: MarkerType.ArrowClosed, color: color },
             labelStyle: { ...e.labelStyle, fill: color, opacity: isDirectlyConnected ? 1 : 0 },
             labelBgStyle: { ...e.labelBgStyle, fillOpacity: isDirectlyConnected ? 0.9 : 0 }
@@ -371,6 +375,7 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
          ...e, 
          animated: false, 
          style: { stroke: e.data?.originalColor, strokeWidth: 1.5, opacity: 0.8 }, 
+         markerStart: { type: MarkerType.ArrowClosed, color: e.data?.originalColor },
          markerEnd: { type: MarkerType.ArrowClosed, color: e.data?.originalColor },
          labelStyle: { ...e.labelStyle, fill: e.data?.originalColor, opacity: 1 },
          labelBgStyle: { ...e.labelBgStyle, fillOpacity: 0.7 }
