@@ -13,7 +13,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import ELK from 'elkjs/lib/elk.bundled.js';
 import { parseMetadataToSchema } from '@/utils/odata-helper';
-import { Tooltip, Button } from "@heroui/react";
+import { Tooltip, Button } from "@nextui-org/react";
 import { Key } from 'lucide-react';
 
 const elk = new ELK();
@@ -21,35 +21,38 @@ const elk = new ELK();
 // 实体节点组件
 const EntityNode = ({ data, selected }: NodeProps) => {
   return (
-    <div className={`border-2 rounded-md min-w-[150px] bg-content1 transition-all ${selected ? 'border-primary shadow-lg' : 'border-default-300'}`}>
+    <div className={`border-2 rounded-md min-w-[180px] bg-content1 transition-all ${selected ? 'border-primary shadow-xl ring-2 ring-primary/20' : 'border-divider shadow-sm'}`}>
       {/* 定义连接点 Handles */}
-      <Handle type="target" position={Position.Top} className="!bg-primary" />
-      <Handle type="source" position={Position.Top} className="!bg-primary" />
-      <Handle type="target" position={Position.Right} className="!bg-primary" />
-      <Handle type="source" position={Position.Right} className="!bg-primary" />
-      <Handle type="target" position={Position.Bottom} className="!bg-primary" />
-      <Handle type="source" position={Position.Bottom} className="!bg-primary" />
-      <Handle type="target" position={Position.Left} className="!bg-primary" />
-      <Handle type="source" position={Position.Left} className="!bg-primary" />
+      <Handle type="target" position={Position.Top} className="!bg-primary w-3 h-3" />
+      <Handle type="source" position={Position.Top} className="!bg-primary w-3 h-3" />
+      <Handle type="target" position={Position.Right} className="!bg-primary w-3 h-3" />
+      <Handle type="source" position={Position.Right} className="!bg-primary w-3 h-3" />
+      <Handle type="target" position={Position.Bottom} className="!bg-primary w-3 h-3" />
+      <Handle type="source" position={Position.Bottom} className="!bg-primary w-3 h-3" />
+      <Handle type="target" position={Position.Left} className="!bg-primary w-3 h-3" />
+      <Handle type="source" position={Position.Left} className="!bg-primary w-3 h-3" />
 
       {/* 标题栏 */}
       <Tooltip content={<div className="p-2"><p className="font-bold">{data.label}</p><p className="text-xs text-default-500">Click to focus related</p></div>}>
-        <div className="bg-default-100 p-2 font-bold text-center border-b border-default-300 text-sm">
+        <div className="bg-primary/10 p-3 font-bold text-center border-b border-divider text-sm text-primary">
           {data.label}
         </div>
       </Tooltip>
 
       {/* 属性列表 */}
-      <div className="p-2 flex flex-col gap-1">
-        {data.properties.slice(0, 8).map((prop: any) => (
-          <Tooltip key={prop.name} content={`Type: ${prop.type}`}>
-            <div className={`text-xs flex items-center gap-1 p-1 rounded ${data.keys.includes(prop.name) ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300' : ''}`}>
-               {data.keys.includes(prop.name) && <Key size={10} />}
-               <span className="truncate">{prop.name}</span>
+      <div className="p-2 flex flex-col gap-1 bg-content1">
+        {data.properties.slice(0, 10).map((prop: any) => (
+          <Tooltip key={prop.name} content={`Type: ${prop.type}`} placement="right">
+            <div className={`text-xs flex items-center justify-between p-1.5 rounded-sm transition-colors cursor-default ${data.keys.includes(prop.name) ? 'bg-warning/10 text-warning-600 font-medium' : 'hover:bg-default-100'}`}>
+               <span className="flex items-center gap-1 truncate max-w-[120px]">
+                 {data.keys.includes(prop.name) && <Key size={10} />}
+                 {prop.name}
+               </span>
+               <span className="text-[10px] text-default-400 ml-2">{prop.type.split('.').pop()}</span>
             </div>
           </Tooltip>
         ))}
-        {data.properties.length > 8 && <div className="text-xs text-default-400 text-center">...more</div>}
+        {data.properties.length > 10 && <div className="text-[10px] text-default-400 text-center py-1">... {data.properties.length - 10} more properties</div>}
       </div>
     </div>
   );
@@ -95,10 +98,10 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
                 id: `${entity.name}-${targetName}`,
                 source: entity.name,
                 target: targetName,
-                markerEnd: { type: MarkerType.ArrowClosed },
+                markerEnd: { type: MarkerType.ArrowClosed, color: '#999' },
                 type: 'smoothstep', 
                 animated: false,
-                style: { stroke: '#b1b1b7' }
+                style: { stroke: '#999', strokeWidth: 1 }
               });
             }
           });
@@ -110,11 +113,11 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
           layoutOptions: {
             'elk.algorithm': 'layered',
             'elk.direction': 'RIGHT',
-            'elk.spacing.nodeNode': '80',
-            'elk.layered.spacing.nodeNodeBetweenLayers': '100',
+            'elk.spacing.nodeNode': '100',
+            'elk.layered.spacing.nodeNodeBetweenLayers': '150',
             'elk.edgeRouting': 'ORTHOGONAL'
           },
-          children: initialNodes.map(n => ({ id: n.id, width: 180, height: 200 })),
+          children: initialNodes.map(n => ({ id: n.id, width: 200, height: 250 })),
           edges: initialEdges.map(e => ({ id: e.id, sources: [e.source], targets: [e.target] }))
         };
 
@@ -159,10 +162,12 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
 
     setEdges((eds) => eds.map(e => ({
       ...e,
+      animated: (e.source === node.id || e.target === node.id),
       style: { 
         ...e.style, 
         stroke: (e.source === node.id || e.target === node.id) ? '#0070f3' : '#e5e5e5',
-        strokeWidth: (e.source === node.id || e.target === node.id) ? 2 : 1
+        strokeWidth: (e.source === node.id || e.target === node.id) ? 2 : 1,
+        zIndex: (e.source === node.id || e.target === node.id) ? 10 : 0
       }
     })));
   }, [edges, setNodes, setEdges]);
@@ -170,14 +175,14 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
   // 重置高亮
   const resetView = () => {
      setNodes((nds) => nds.map(n => ({...n, style: { opacity: 1 }})));
-     setEdges((eds) => eds.map(e => ({...e, style: { stroke: '#b1b1b7', strokeWidth: 1 }})));
+     setEdges((eds) => eds.map(e => ({...e, animated: false, style: { stroke: '#999', strokeWidth: 1 }})));
   };
 
   return (
-    <div className="w-full h-full relative" style={{ height: '100%', minHeight: '600px' }}>
-      {loading && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80">Loading Layout...</div>}
+    <div className="w-full h-full relative bg-content2/30" style={{ height: '100%', minHeight: '600px' }}>
+      {loading && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"><Button isLoading variant="flat" color="primary">Analyzing Metadata...</Button></div>}
       <div className="absolute top-4 right-4 z-10">
-        <Button size="sm" onPress={resetView}>Reset Highlight</Button>
+        <Button size="sm" color="primary" variant="shadow" onPress={resetView}>Reset Highlight</Button>
       </div>
       <ReactFlow
         nodes={nodes}
@@ -189,8 +194,8 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
         fitView
         attributionPosition="bottom-right"
       >
-        <Controls />
-        <Background color="#aaa" gap={16} />
+        <Controls className="bg-content1 border border-divider shadow-sm" />
+        <Background color="#888" gap={20} size={1} />
       </ReactFlow>
     </div>
   );
