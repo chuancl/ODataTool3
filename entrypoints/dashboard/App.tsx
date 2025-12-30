@@ -6,7 +6,8 @@ import ODataERDiagram from '@/components/ODataERDiagram';
 import QueryBuilder from '@/components/QueryBuilder';
 import MockDataGenerator from '@/components/MockDataGenerator';
 import { Moon, Sun } from 'lucide-react';
-import '@/assets/main.css';
+// 使用相对路径引入样式，确保构建工具能正确处理
+import '../../assets/main.css';
 
 const App: React.FC = () => {
   const [isDark, setIsDark] = useState(false);

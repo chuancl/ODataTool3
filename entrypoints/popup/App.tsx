@@ -4,7 +4,7 @@ import { HeroUIProvider, Button, Input, Switch, Card, CardBody, Divider } from "
 import { getSettings, saveSettings, AppSettings } from '@/utils/storage';
 import { Settings, ExternalLink, Plus, Trash2 } from 'lucide-react';
 import { browser } from 'wxt/browser';
-import '@/assets/main.css';
+import '../../assets/main.css';
 
 const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings | null>(null);

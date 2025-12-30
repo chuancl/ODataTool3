@@ -147,7 +147,7 @@ const QueryBuilder: React.FC<Props> = ({ url, version }) => {
           selectedKeys={selectedEntity ? [selectedEntity] : []} 
           onSelectionChange={handleEntityChange}
         >
-          {entitySets.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+          {entitySets.map(e => <SelectItem key={e}>{e}</SelectItem>)}
         </Select>
         <Input label="$filter" placeholder="Price gt 20" value={filter} onValueChange={setFilter} />
         <Input label="$select" placeholder="Name,Price" value={select} onValueChange={setSelect} />
