@@ -143,8 +143,9 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
             const baseHeight = 45; 
             const propsHeight = visibleProps * 24; 
             const footerHeight = propCount > 12 ? 25 : 10;
-            // 宽度设为 240，高度稍微多加一点 buffer
-            return { width: 240, height: baseHeight + propsHeight + footerHeight + 20 };
+            // 宽度设为 300 (实际约 200)，高度也增加 buffer
+            // 增加尺寸是为了让 ELK 认为节点很大，从而在布局时留出更多空白，防止连线拥挤
+            return { width: 300, height: baseHeight + propsHeight + footerHeight + 50 };
         };
 
         // 4. ELK 布局配置
@@ -153,20 +154,20 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
           layoutOptions: {
             'elk.algorithm': 'layered',
             'elk.direction': 'RIGHT',
-            // 节点间距：大幅增加
-            'elk.spacing.nodeNode': '150', 
-            // 层间距：大幅增加，给连线留足空间
-            'elk.layered.spacing.nodeNodeBetweenLayers': '400', 
+            // 节点垂直间距：大幅增加
+            'elk.spacing.nodeNode': '100', 
+            // 层间距（水平）：大幅增加，给连线留足空间
+            'elk.layered.spacing.nodeNodeBetweenLayers': '250', 
             // 路由策略
             'elk.edgeRouting': 'ORTHOGONAL',
             // 连线与节点之间的最小间距 (防止穿过)
-            'elk.layered.spacing.edgeNodeBetweenLayers': '100',
-            // 节点放置策略
+            'elk.layered.spacing.edgeNodeBetweenLayers': '80',
+            // 节点放置策略 - BALANCED 试图让节点对齐更整齐
             'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
             // 鼓励直线
             'elk.layered.nodePlacement.favorStraightEdges': 'true',
             // 组件间距
-            'elk.spacing.componentComponent': '200',
+            'elk.spacing.componentComponent': '150',
           },
           children: initialNodes.map(n => {
               const dims = getNodeDimensions(n.data.properties.length);
@@ -180,12 +181,15 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
         // 5. 应用布局坐标
         const layoutedNodes = initialNodes.map(node => {
           const elkNode = layoutedGraph.children?.find(n => n.id === node.id);
+          // 使用实际 CSS 渲染的宽度估值，用于后续计算连线端点
+          const renderWidth = 220; 
+          const renderHeight = node.data.properties.length * 24 + 60; // 粗略估算
+
           return {
             ...node,
             position: { x: elkNode?.x || 0, y: elkNode?.y || 0 },
-            // 保存尺寸供后续连线计算使用
-            width: elkNode?.width || 200,
-            height: elkNode?.height || 200
+            width: renderWidth,
+            height: renderHeight
           };
         });
 
@@ -196,44 +200,37 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
 
             if (!sourceNode || !targetNode) return null;
 
-            // 注意：因为上面已经过滤了自关联，所以这里不需要再处理 e.source === e.target 的情况
-
-            // --- 处理不同节点间的关联 ---
             // 计算中心点
             const sx = sourceNode.position.x + sourceNode.width / 2;
-            const sy = sourceNode.position.y + sourceNode.height / 2;
             const tx = targetNode.position.x + targetNode.width / 2;
-            const ty = targetNode.position.y + targetNode.height / 2;
-
+            
             const dx = tx - sx;
-            const dy = ty - sy;
+            
+            // 节点实际宽度阈值 (用于判断是否在同一列)
+            const columnThreshold = 200; 
 
             let sourceHandle = 'source-right';
             let targetHandle = 'target-left';
 
-            // 简单的方位判断逻辑，决定连线从哪边出，哪边进
-            if (Math.abs(dx) > Math.abs(dy)) {
-                // 水平方向为主
-                if (dx > 0) {
-                    // Target 在 Source 右侧 -> Source用右，Target用左
-                    sourceHandle = 'source-right';
-                    targetHandle = 'target-left';
-                } else {
-                    // Target 在 Source 左侧 -> Source用左，Target用右
-                    sourceHandle = 'source-left';
-                    targetHandle = 'target-right';
-                }
+            // --- 优化后的连线策略 ---
+
+            if (Math.abs(dx) < columnThreshold) {
+                // 情况 A: 垂直对齐 (在同一列，或者水平距离很近)
+                // 策略: 强制使用 Right -> Right。
+                // 这样连线会从源节点右边出来，绕一个大弯，进入目标节点右边。
+                // 避免了直接从 Bottom -> Top 穿过中间可能存在的其他节点。
+                sourceHandle = 'source-right';
+                targetHandle = 'target-right';
+            } else if (dx > 0) {
+                // 情况 B: 目标在右侧 (标准层级流向)
+                // 策略: Right -> Left
+                sourceHandle = 'source-right';
+                targetHandle = 'target-left';
             } else {
-                // 垂直方向为主
-                if (dy > 0) {
-                    // Target 在 Source 下方 -> Source用下，Target用上
-                    sourceHandle = 'source-bottom';
-                    targetHandle = 'target-top';
-                } else {
-                    // Target 在 Source 上方 -> Source用上，Target用下
-                    sourceHandle = 'source-top';
-                    targetHandle = 'target-bottom';
-                }
+                // 情况 C: 目标在左侧 (反向/回环)
+                // 策略: Left -> Right
+                sourceHandle = 'source-left';
+                targetHandle = 'target-right';
             }
 
             return {
