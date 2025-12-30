@@ -4,7 +4,8 @@ interface EntityType {
   name: string;
   keys: string[];
   properties: { name: string; type: string }[];
-  navigationProperties: { name: string; toRole?: string; relationship?: string; type?: string }[];
+  // targetType is the resolved full type name (e.g. NorthwindModel.Order)
+  navigationProperties: { name: string; targetType: string | null; relationship?: string }[];
 }
 
 interface Association {
@@ -45,22 +46,45 @@ export const parseMetadataToSchema = (xmlText: string) => {
   const doc = parser.parseFromString(xmlText, "application/xml");
   
   // 查找 Schema 节点 (处理命名空间)
-  const schemas = doc.getElementsByTagName("Schema"); // 简单处理，忽略命名空间前缀
-  // 也可以使用 getElementsByTagNameNS if strictly required
+  const schemas = doc.getElementsByTagName("Schema"); 
   
   if (!schemas || schemas.length === 0) return { entities: [], associations: [] };
 
   // 通常取第一个主要的 Schema
   const schema = schemas[0];
-  const namespace = schema.getAttribute("Namespace");
+  const namespace = schema.getAttribute("Namespace") || "";
 
   const entities: EntityType[] = [];
-  const associations: Association[] = [];
-
-  const entityTypes = schema.getElementsByTagName("EntityType");
+  
+  // --- Step 1: 预先解析 Associations (针对 V2/V3) ---
+  // Map: FullAssociationName -> { RoleName: FullEntityType }
+  const associationMap: Record<string, Record<string, string>> = {};
+  
   const assocTypes = schema.getElementsByTagName("Association");
+  for (let i = 0; i < assocTypes.length; i++) {
+    const at = assocTypes[i];
+    const name = at.getAttribute("Name");
+    if (!name) continue;
 
-  // 解析实体
+    const fullName = namespace ? `${namespace}.${name}` : name;
+    const roles: Record<string, string> = {};
+    
+    const ends = at.getElementsByTagName("End");
+    for (let j = 0; j < ends.length; j++) {
+        const role = ends[j].getAttribute("Role");
+        const type = ends[j].getAttribute("Type");
+        if (role && type) {
+            roles[role] = type;
+        }
+    }
+    associationMap[fullName] = roles;
+    // 有些 metadata 使用不带命名空间的引用，做一个备用映射
+    associationMap[name] = roles; 
+  }
+
+  // --- Step 2: 解析实体 ---
+  const entityTypes = schema.getElementsByTagName("EntityType");
+
   for (let i = 0; i < entityTypes.length; i++) {
     const et = entityTypes[i];
     const name = et.getAttribute("Name") || "Unknown";
@@ -86,41 +110,49 @@ export const parseMetadataToSchema = (xmlText: string) => {
     }
 
     // 解析 NavigationProperties
-    const navProps: any[] = [];
+    const navProps: { name: string; targetType: string | null; relationship?: string }[] = [];
     const navs = et.getElementsByTagName("NavigationProperty");
+    
     for (let n = 0; n < navs.length; n++) {
+        const navName = navs[n].getAttribute("Name") || "Unknown";
+        const v4Type = navs[n].getAttribute("Type"); // V4 直接有 Type
+        const relationship = navs[n].getAttribute("Relationship"); // V2/V3
+        const toRole = navs[n].getAttribute("ToRole"); // V2/V3
+
+        let targetType: string | null = null;
+
+        if (v4Type) {
+            // OData V4
+            targetType = v4Type;
+        } else if (relationship && toRole) {
+            // OData V2/V3: 需要通过 Association 查找 Type
+            // Relationship 通常是 "Namespace.AssociationName"
+            const assocRoles = associationMap[relationship];
+            if (assocRoles && assocRoles[toRole]) {
+                targetType = assocRoles[toRole];
+            } else {
+                 // 尝试处理没有命名空间前缀的情况
+                 const simpleRelName = relationship.split('.').pop();
+                 if (simpleRelName && associationMap[simpleRelName] && associationMap[simpleRelName][toRole]) {
+                     targetType = associationMap[simpleRelName][toRole];
+                 }
+            }
+        }
+
         navProps.push({
-            name: navs[n].getAttribute("Name"),
-            relationship: navs[n].getAttribute("Relationship"), // V2/V3
-            toRole: navs[n].getAttribute("ToRole"), // V2/V3
-            type: navs[n].getAttribute("Type") // V4
+            name: navName,
+            targetType: targetType, 
+            relationship: relationship || undefined
         });
     }
 
     entities.push({ name, keys, properties, navigationProperties: navProps });
   }
 
-  // 解析关联 (V2/V3)
-  for (let i = 0; i < assocTypes.length; i++) {
-    const at = assocTypes[i];
-    const name = at.getAttribute("Name") || "";
-    const endsData = [];
-    const ends = at.getElementsByTagName("End");
-    
-    for (let j = 0; j < ends.length; j++) {
-        endsData.push({
-            role: ends[j].getAttribute("Role") || "",
-            type: ends[j].getAttribute("Type") || "",
-            multiplicity: ends[j].getAttribute("Multiplicity") || ""
-        });
-    }
-    associations.push({ name, ends: endsData });
-  }
-
-  return { entities, associations, namespace };
+  return { entities, namespace };
 };
 
-// 3. SAPUI5 代码生成器
+// 3. SAPUI5 代码生成器 (保持不变)
 export const generateSAPUI5Code = (
   operation: 'read' | 'create' | 'update' | 'delete',
   entitySet: string,

@@ -101,29 +101,43 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
         const initialEdges: Edge[] = [];
         entities.forEach(entity => {
           entity.navigationProperties.forEach((nav: any) => {
-            // V2: Type is not always present, might be derived from association.
-            // Simplified logic: try to find entity by matching nav name or type hints
-            let targetName = nav.type ? nav.type.split('.').pop() : null; 
-            
-            // 如果没有直接的Type (V2常见), 尝试简单的启发式或从关联中查找 (在parseMetadataToSchema中已简化)
-            // 这里我们假设如果 targetName 为空，先忽略，以免连错
-            if (targetName) {
-                // Remove 'Collection(...)' wrapper if exists
+            if (nav.targetType) {
+                let targetName = nav.targetType;
+                
+                // 清理 Type 字符串
+                // 1. 移除 Collection(...) 包装
                 if (targetName.startsWith('Collection(')) {
                     targetName = targetName.slice(11, -1);
                 }
                 
-                initialEdges.push({
-                    id: `${entity.name}-${targetName}-${nav.name}`,
-                    source: entity.name,
-                    target: targetName,
-                    markerEnd: { type: MarkerType.ArrowClosed, color: '#999' },
-                    type: 'smoothstep', 
-                    animated: false,
-                    style: { stroke: '#999', strokeWidth: 1 },
-                    label: nav.name,
-                    labelStyle: { fill: '#999', fontSize: 10 }
-                });
+                // 2. 移除命名空间 (例如 NorthwindModel.Order -> Order)
+                // 因为我们的 Node ID 只是简单的实体名
+                targetName = targetName.split('.').pop();
+                
+                if (targetName && initialNodes.find(n => n.id === targetName)) {
+                    // 生成唯一颜色 (基于 source id)
+                    const stringHash = (str: string) => {
+                        let hash = 0;
+                        for (let i = 0; i < str.length; i++) {
+                            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                        }
+                        return hash;
+                    }
+                    const c = (stringHash(entity.name) & 0x00FFFFFF).toString(16).toUpperCase();
+                    const color = "#" + "00000".substring(0, 6 - c.length) + c;
+
+                    initialEdges.push({
+                        id: `${entity.name}-${targetName}-${nav.name}`,
+                        source: entity.name,
+                        target: targetName,
+                        markerEnd: { type: MarkerType.ArrowClosed, color: '#999' },
+                        type: 'smoothstep', 
+                        animated: false,
+                        style: { stroke: '#999', strokeWidth: 1.5 },
+                        // label: nav.name, // 标签太多可能会比较乱，暂时注释掉，鼠标悬停可以显示
+                        data: { label: nav.name }
+                    });
+                }
             }
           });
         });
@@ -134,11 +148,12 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
           layoutOptions: {
             'elk.algorithm': 'layered',
             'elk.direction': 'RIGHT',
-            'elk.spacing.nodeNode': '80',
-            'elk.layered.spacing.nodeNodeBetweenLayers': '120',
-            'elk.edgeRouting': 'ORTHOGONAL'
+            'elk.spacing.nodeNode': '100',
+            'elk.layered.spacing.nodeNodeBetweenLayers': '150',
+            'elk.edgeRouting': 'ORTHOGONAL',
+            'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF'
           },
-          children: initialNodes.map(n => ({ id: n.id, width: 220, height: 200 })), // 估算高度
+          children: initialNodes.map(n => ({ id: n.id, width: 220, height: 200 })), 
           edges: initialEdges.map(e => ({ id: e.id, sources: [e.source], targets: [e.target] }))
         };
 
@@ -192,16 +207,23 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
         strokeWidth: (e.source === node.id || e.target === node.id) ? 2 : 1,
         zIndex: (e.source === node.id || e.target === node.id) ? 10 : 0
       },
+      label: (e.source === node.id || e.target === node.id) ? e.data.label : '',
       labelStyle: {
-        fill: (e.source === node.id || e.target === node.id) ? '#0070f3' : '#e5e5e5',
-        fontWeight: (e.source === node.id || e.target === node.id) ? 700 : 400
-      }
+        fill: '#0070f3',
+        fontWeight: 700
+      },
+      labelBgStyle: { fill: 'rgba(255, 255, 255, 0.8)' }
     })));
   }, [edges, setNodes, setEdges]);
 
   const resetView = () => {
      setNodes((nds) => nds.map(n => ({...n, style: { opacity: 1, filter: 'none' }})));
-     setEdges((eds) => eds.map(e => ({...e, animated: false, style: { stroke: '#999', strokeWidth: 1 }, labelStyle: { fill: '#999' } })));
+     setEdges((eds) => eds.map(e => ({
+         ...e, 
+         animated: false, 
+         style: { stroke: '#999', strokeWidth: 1.5 }, 
+         label: '' 
+     })));
   };
 
   return (
