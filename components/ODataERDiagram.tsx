@@ -190,6 +190,24 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
 
             if (!sourceNode || !targetNode) return null;
 
+            // --- 处理自关联 (Self-Reference) ---
+            if (e.source === e.target) {
+                // 自关联强制使用 Right -> Right 回环，避免穿过节点
+                return {
+                    id: e.id,
+                    source: e.source,
+                    target: e.target,
+                    sourceHandle: 'source-right',
+                    targetHandle: 'target-right',
+                    type: 'default', // 使用 Bezier 曲线绘制自然的环
+                    markerEnd: { type: MarkerType.ArrowClosed, color: '#999' },
+                    animated: false,
+                    style: { stroke: '#999', strokeWidth: 1.5, opacity: 1 },
+                    data: { label: e.label }
+                };
+            }
+
+            // --- 处理不同节点间的关联 ---
             // 计算中心点
             const sx = sourceNode.position.x + sourceNode.width / 2;
             const sy = sourceNode.position.y + sourceNode.height / 2;
