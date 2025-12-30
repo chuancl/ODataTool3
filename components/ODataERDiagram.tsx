@@ -18,11 +18,9 @@ import { Key } from 'lucide-react';
 
 const elk = new ELK();
 
-// 1. 自定义实体节点组件
 const EntityNode = ({ data, selected }: NodeProps) => {
   return (
     <div className={`border-2 rounded-md min-w-[150px] bg-content1 transition-all ${selected ? 'border-primary shadow-lg' : 'border-default-300'}`}>
-      {/* 4个方向的 Handles 用于连接 */}
       <Handle type="target" position={Position.Top} className="!bg-primary" />
       <Handle type="source" position={Position.Top} className="!bg-primary" />
       <Handle type="target" position={Position.Right} className="!bg-primary" />
@@ -32,14 +30,12 @@ const EntityNode = ({ data, selected }: NodeProps) => {
       <Handle type="target" position={Position.Left} className="!bg-primary" />
       <Handle type="source" position={Position.Left} className="!bg-primary" />
 
-      {/* 标题头 */}
       <Tooltip content={<div className="p-2"><p className="font-bold">{data.label}</p><p className="text-xs text-default-500">Click to focus related</p></div>}>
         <div className="bg-default-100 p-2 font-bold text-center border-b border-default-300 text-sm">
           {data.label}
         </div>
       </Tooltip>
 
-      {/* 属性列表 */}
       <div className="p-2 flex flex-col gap-1">
         {data.properties.slice(0, 8).map((prop: any) => (
           <Tooltip key={prop.name} content={`Type: ${prop.type}`}>
@@ -66,7 +62,6 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [loading, setLoading] = useState(false);
 
-  // 加载和布局逻辑
   useEffect(() => {
     if (!url) return;
     setLoading(true);
@@ -78,15 +73,13 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
         const xml = await res.text();
         const { entities, associations } = parseMetadataToSchema(xml);
 
-        // 1. 构建初始 Nodes
         const initialNodes = entities.map((e) => ({
           id: e.name,
           type: 'entity',
           data: { label: e.name, properties: e.properties, keys: e.keys },
-          position: { x: 0, y: 0 } // 初始位置，后面由 ELK 计算
+          position: { x: 0, y: 0 }
         }));
 
-        // 2. 构建初始 Edges
         const initialEdges: Edge[] = [];
         entities.forEach(entity => {
           entity.navigationProperties.forEach((nav: any) => {
@@ -105,7 +98,6 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
           });
         });
 
-        // 3. 使用 Elkjs 进行布局
         const elkGraph = {
           id: 'root',
           layoutOptions: {
@@ -171,8 +163,9 @@ const ODataERDiagram: React.FC<Props> = ({ url }) => {
      setEdges((eds) => eds.map(e => ({...e, style: { stroke: '#b1b1b7', strokeWidth: 1 }})));
   };
 
+  // 关键：强制 height: 100% 确保 React Flow 有高度
   return (
-    <div className="w-full h-full relative" style={{ height: '100%', minHeight: '400px' }}>
+    <div className="w-full relative" style={{ height: '100%', minHeight: '400px' }}>
       {loading && <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80">Loading Layout...</div>}
       <div className="absolute top-4 right-4 z-10">
         <Button size="sm" onPress={resetView}>Reset Highlight</Button>

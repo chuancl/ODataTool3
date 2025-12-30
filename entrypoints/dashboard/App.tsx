@@ -34,10 +34,16 @@ const App: React.FC = () => {
   const handleUrlChange = (val: string) => setUrl(val);
 
   return (
-    <NextUIProvider className={`${isDark ? 'dark' : ''} h-full`}>
-      <div className="h-screen bg-background text-foreground flex flex-col">
+    <NextUIProvider>
+      {/* 
+         修复核心：
+         NextUIProvider 可能不渲染具体的 div 容器，
+         所以我们需要在这里包裹一层 div 来应用 dark mode 类和全屏高度。
+      */}
+      <div className={`${isDark ? 'dark' : ''} text-foreground bg-background w-full h-screen flex flex-col overflow-hidden`}>
+        
         {/* Top Navigation Bar */}
-        <nav className="h-16 border-b border-divider px-6 flex items-center justify-between bg-content1 shrink-0">
+        <nav className="h-16 border-b border-divider px-6 flex items-center justify-between bg-content1 shrink-0 z-50 relative">
           <div className="flex items-center gap-4">
             <span className="text-xl font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
               OData Master
@@ -68,45 +74,39 @@ const App: React.FC = () => {
         </nav>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-hidden relative p-4">
+        <main className="flex-1 w-full h-full relative overflow-hidden bg-content2/50 p-4">
           {odataVersion === 'Unknown' && !isValidating ? (
             <div className="flex flex-col items-center justify-center h-full text-default-400">
               <p>Please enter a valid OData URL and click Parse.</p>
             </div>
           ) : (
-            /* 
-               关键修改：使用 Flex 布局确保 Tabs 撑满高度
-               base: 设为 flex flex-col h-full
-               panel: 设为 flex-1 h-full overflow-hidden，强制内容区域占据剩余空间
-            */
             <Tabs 
               aria-label="Features" 
               color="primary" 
               variant="underlined" 
               classNames={{
-                base: "h-full flex flex-col",
-                tabList: "flex-none", 
-                panel: "flex-1 h-full overflow-hidden p-0 pt-2"
+                base: "h-full w-full flex flex-col",
+                tabList: "flex-none p-0", 
+                panel: "flex-1 w-full h-full p-0 pt-2 overflow-hidden" // 强制 Panel 占满剩余空间
               }}
             >
-              <Tab key="er" title="ER Diagram">
-                <Card className="h-full shadow-sm">
-                  <CardBody className="p-0 overflow-hidden h-full">
-                     {/* ER图组件，传入URL以便内部获取Metadata解析 */}
+              <Tab key="er" title="ER Diagram" className="h-full">
+                <Card className="h-full w-full shadow-sm" radius="sm">
+                  <CardBody className="p-0 overflow-hidden h-full w-full relative">
                      <ODataERDiagram url={url} />
                   </CardBody>
                 </Card>
               </Tab>
-              <Tab key="query" title="Query Builder">
-                <Card className="h-full overflow-y-auto shadow-sm">
-                  <CardBody>
+              <Tab key="query" title="Query Builder" className="h-full">
+                <Card className="h-full w-full shadow-sm" radius="sm">
+                  <CardBody className="h-full overflow-y-auto p-4">
                     <QueryBuilder url={url} version={odataVersion} />
                   </CardBody>
                 </Card>
               </Tab>
-              <Tab key="mock" title="Mock Data">
-                <Card className="h-full overflow-y-auto shadow-sm">
-                  <CardBody>
+              <Tab key="mock" title="Mock Data" className="h-full">
+                <Card className="h-full w-full shadow-sm" radius="sm">
+                  <CardBody className="h-full overflow-y-auto p-4">
                     <MockDataGenerator url={url} version={odataVersion} />
                   </CardBody>
                 </Card>
